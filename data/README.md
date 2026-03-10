@@ -2,7 +2,7 @@
 
 Tài liệu này cung cấp thông tin chi tiết về các bộ dữ liệu được sử dụng trong dự án, bao gồm nguồn gốc, cấu trúc từ điển dữ liệu (data dictionary), và các quy định về bản quyền. Dự án này phục vụ hai bài toán Machine Learning cốt lõi: **Hồi quy (Regression)** và **Phân lớp (Classification)**.
 
-## **1. Directory Structure (Cấu trúc thư mục)**
+## **1. Directory Structure**
 
 Thư mục `data/` được tổ chức theo tiêu chuẩn vòng đời dữ liệu, đảm bảo nguyên tắc không bao giờ ghi đè lên dữ liệu gốc (immutable raw data):
 
@@ -52,8 +52,8 @@ Dữ liệu được sử dụng là **Room Occupancy Estimation**, tập hợp 
 | --- | --- |
 | **Primary Source** | [Room Occupancy Estimation (Kaggle)](https://www.kaggle.com/datasets/ruchikakumbhar/room-occupancy-estimation/data) |
 | **Original Custodian** | [UCI Machine Learning Repository (ID: 864)](https://archive.ics.uci.edu/dataset/864/room+occupancy+estimation) |
-| **Temporal Coverage** | **4 ngày liên tục** (Bắt đầu từ 22/12/2017) |
-| **Geospatial Coverage** | Căn phòng thí nghiệm tiêu chuẩn kích thước **6m x 4.6m**, trang bị 7 cụm cảm biến. |
+| **Temporal Coverage** | *4 ngày liên tục* (Bắt đầu từ 22/12/2017) |
+| **Geospatial Coverage** | Căn phòng thí nghiệm tiêu chuẩn kích thước *6m x 4.6m*, trang bị 7 cụm cảm biến. |
 | **Observational Unit** | Tần suất lấy mẫu mỗi 30 giây (30-second interval readings). |
 | **Dataset Size** | 10,129 bản ghi với 19 biến số đo lường vật lý và thời gian. |
 
@@ -102,11 +102,3 @@ Tệp dữ liệu gốc được đặt tại: `data/raw/Occupancy_Estimation.cs
 kaggle datasets download -d ruchikakumbhar/room-occupancy-estimation -p ./data/raw/ --unzip
 
 ```
-
-
-
----
-
-Với cấu trúc này, kho lưu trữ của bạn đã mang dáng dấp của một công trình nghiên cứu chuyên nghiệp thực thụ. Bất kỳ ai đọc vào cũng nắm rõ luồng dữ liệu của bạn.
-
-Để nối tiếp phần `Reproducibility` ở mục 4, bạn có muốn tôi thiết kế một đoạn script Python nhỏ dùng `Pandas` và `Scikit-learn` lưu trong thư mục `src/` để thực hiện nhiệm vụ: đọc file CSV gốc, tự động loại bỏ biến thời gian, chia train/test, và lưu Ma trận thiết kế $X$ đã chuẩn hóa vào thư mục `data/processed/` không?
