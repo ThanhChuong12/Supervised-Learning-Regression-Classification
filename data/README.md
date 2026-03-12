@@ -1,22 +1,34 @@
 # **Data Catalog & Provenance**
 
-Tài liệu này cung cấp thông tin chi tiết về các bộ dữ liệu được sử dụng trong dự án, bao gồm nguồn gốc, cấu trúc từ điển dữ liệu (data dictionary), và các quy định về bản quyền. Dự án này phục vụ hai bài toán Machine Learning cốt lõi: **Hồi quy (Regression)** và **Phân lớp (Classification)**.
+Tài liệu này cung cấp thông tin chi tiết về các bộ dữ liệu được sử dụng trong đồ án, bao gồm nguồn gốc, cấu trúc từ điển dữ liệu (data dictionary), và các quy định về bản quyền. Đồ án này phục vụ hai bài toán Machine Learning cốt lõi: **Hồi quy (Regression)** và **Phân lớp (Classification)**.
+
+## **Table of Contents**
+
+- [**Data Catalog \& Provenance**](#data-catalog--provenance)
+  - [**Table of Contents**](#table-of-contents)
+  - [**1. Directory Structure**](#1-directory-structure)
+  - [**2. Regression Task Dataset (Bài toán Hồi quy)**](#2-regression-task-dataset-bài-toán-hồi-quy)
+    - [**2.1 Dataset Origin \& Provenance**](#21-dataset-origin--provenance)
+    - [**2.2 Files \& Attributes**](#22-files--attributes)
+    - [**2.3 Licensing \& Usage Rights**](#23-licensing--usage-rights)
+  - [**3. Classification Task Dataset (Bài toán Phân lớp)**](#3-classification-task-dataset-bài-toán-phân-lớp)
+    - [**3.1 Dataset Origin \& Provenance**](#31-dataset-origin--provenance)
+    - [**3.2 Files \& Attributes**](#32-files--attributes)
+    - [**3.3 Licensing \& Usage Rights**](#33-licensing--usage-rights)
+  - [**4. Data Setup \& Reproducibility**](#4-data-setup--reproducibility)
 
 ## **1. Directory Structure**
 
-Thư mục `data/` được tổ chức theo tiêu chuẩn vòng đời dữ liệu, đảm bảo nguyên tắc không bao giờ ghi đè lên dữ liệu gốc (immutable raw data):
+Thư mục `data/` được tổ chức theo tiêu chuẩn vòng đời dữ liệu, đảm bảo nguyên tắc không bao giờ ghi đè lên dữ liệu gốc:
 
 ```text
 data/
-├── raw/                 # Dữ liệu gốc nguyên bản, KHÔNG ĐƯỢC PHÉP CHỈNH SỬA.
+├── raw/                 # Dữ liệu gốc nguyên bản.
 │   ├── Energy_Use.csv
 │   └── Occupancy_Estimation.csv
-├── interim/             # Dữ liệu trung gian đang trong quá trình tiền xử lý.
 ├── processed/           # Dữ liệu đã làm sạch, chuẩn hóa (Standardized/Design Matrix).
 └── README.md            # Tài liệu bạn đang đọc.
-
 ```
-
 ---
 
 ## **2. Regression Task Dataset (Bài toán Hồi quy)**
@@ -121,19 +133,34 @@ Tệp dữ liệu gốc được đặt tại: `data/raw/Occupancy_Estimation.cs
 * **Dataset License:** Creative Commons Attribution 4.0 International (CC BY 4.0). Dữ liệu được phép sử dụng cho mục đích nghiên cứu và giáo dục.
 * **Citation Format:**
 > *Singh, A. P., Jain, V., Chaudhari, S., Kraemer, F. A., Werner, S., & Garg, V. (2018). Machine Learning-Based Occupancy Estimation Using Multivariate Sensor Nodes. In 2018 IEEE Globecom Workshops (GC Wkshps) (pp. 1-6). IEEE. Dataset retrieved from UCI Machine Learning Repository [[https://archive.ics.uci.edu/dataset/864/room+occupancy+estimation](https://archive.ics.uci.edu/dataset/864/room+occupancy+estimation)].*
-
-
-
 ---
 
-## **4. Data Setup & Reproducibility (Hướng dẫn Tái lập)**
+## **4. Data Setup & Reproducibility**
 
-Để đảm bảo tính nhất quán của môi trường phát triển, vui lòng tuân thủ các bước sau để lấy dữ liệu nếu bạn clone dự án này từ một thiết bị khác:
+Để đảm bảo tính nhất quán của môi trường phát triển và tuân thủ nguyên tắc quản lý dữ liệu, vui lòng thực hiện các bước sau để thiết lập dữ liệu gốc (raw data) khi clone đồ án này về máy:
 
-1. Đảm bảo đã thiết lập Kaggle API token (`kaggle.json`) trong thư mục `~/.kaggle/`.
-2. Chạy đoạn script tự động tải dữ liệu (sẽ tự động tải file nén và giải nén vào thư mục `raw/`):
+**Bước 1: Thiết lập Kaggle API**
+
+Đảm bảo bạn đã cài đặt thư viện `kaggle` và đặt file `kaggle.json` (chứa API token của bạn) vào đúng thư mục hệ thống:
+* **Linux/Mac:** `~/.kaggle/kaggle.json`
+* **Windows:** `C:\Users\<Username>\.kaggle\kaggle.json`
+
+**Bước 2: Chạy Script tải dữ liệu**
+
+Bạn có thể chạy trực tiếp các lệnh sau trong terminal hoặc lưu thành một file script (ví dụ: `scripts/setup_data.sh`) để tự động tải và giải nén dữ liệu vào thư mục `data/raw/`:
+
 ```bash
-# Ví dụ lệnh tải (tùy thuộc vào script bash bạn viết)
+#!/bin/bash
+
+# Create raw data directory if it doesn't exist
+mkdir -p ./data/raw/
+
+echo "Downloading Regression dataset (Appliances Energy Prediction)..."
+kaggle datasets download -d sohommajumder21/appliances-energy-prediction-data-set -p ./data/raw/ --unzip
+
+echo "Downloading Classification dataset (Room Occupancy Estimation)..."
 kaggle datasets download -d ruchikakumbhar/room-occupancy-estimation -p ./data/raw/ --unzip
 
+echo "Data download complete! Please check the ./data/raw/ directory."
 ```
+*(Lưu ý: Sau khi giải nén, bạn có thể cần đổi tên các file `.csv` về đúng chuẩn `Energy_Use.csv` và `Occupancy_Estimation.csv` như mô tả trong cấu trúc thư mục nếu tên file gốc từ Kaggle có sự khác biệt).*
