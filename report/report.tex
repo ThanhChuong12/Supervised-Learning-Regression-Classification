@@ -1,0 +1,115 @@
+% 'draft' mode can be used to speed up compilation
+\documentclass[oneside,final]{hcmus-report}
+\usepackage{codespace}
+
+% Draft watermark
+% https://github.com/callegar/LaTeX-draftwatermark
+
+% Encodings
+\usepackage{gensymb,textcomp}
+
+% Better tables
+% Wide tables go to https://tex.stackexchange.com/q/332902
+\usepackage{array,longtable,multicol,multirow,siunitx,tabularx}
+
+% Better enum
+\usepackage{enumitem}
+
+% Graphics
+\usepackage{caption,float}
+
+% Add options for figures, like max width, framing, etc.
+\usepackage[export]{adjustbox}
+
+% References
+% Use \Cref{} instead of \ref{}
+\usepackage[nameinlink]{cleveref}
+
+% FOR DEMONSTRATION PURPOSES, REMOVE IN PRODUCTION
+\usepackage{mwe}
+\usepackage{graphicx}  
+\usepackage{float}     
+\usepackage{subcaption}
+% Sub-preambles
+% https://github.com/MartinScharrer/standalone
+
+% Configurations
+\coursename{Nhập môn học máy}
+\reporttype{Báo cáo đồ án 1}
+\title{Học có giám sát và ứng dụng}
+\advisor{& ThS. Lê Nhựt Nam &}
+\stuname{%
+  & 23120195 & Lê Hà Thanh Chương \\
+  & 23120197 & Trà Văn Sỹ \\
+  & 23120199 & Huỳnh Đức Thịnh \\
+  & 23120257 & Bùi Trung Hiếu \\
+  & 23120330 & Lê Công Phúc \\
+}
+
+% Allow page breaks inside align* environment
+%\allowdisplaybreaks{}
+
+% Makes a lot of things blue, avoid at all costs
+%\everymath{\color{blue}}
+
+% Set depth of numbering for counters
+\AtBeginDocument{\counterwithin{lstlisting}{section}}
+
+% Rename some sections
+%\AtBeginDocument{\renewcommand*{\contentsname}{Contents}}
+%\AtBeginDocument{\renewcommand*{\refname}{References}}
+%\AtBeginDocument{\renewcommand*{\bibname}{References}}
+
+% Custom commands
+%\newcommand*\mean[1]{\bar{#1}}
+
+% Allow page breaks inside align* environment
+%\allowdisplaybreaks{}
+
+% Makes a lot of things blue, avoid at all costs
+%\everymath{\color{blue}}
+
+% Set depth of numbering for counters
+\AtBeginDocument{\counterwithin{lstlisting}{section}}
+
+% Rename some sections
+%\AtBeginDocument{\renewcommand*{\contentsname}{Contents}}
+%\AtBeginDocument{\renewcommand*{\refname}{References}}
+%\AtBeginDocument{\renewcommand*{\bibname}{References}}
+
+% Custom commands
+%\newcommand*\mean[1]{\bar{#1}}
+\AtBeginDocument{\renewcommand{\contentsname}{Mục lục}}
+\AtBeginDocument{\renewcommand{\listfigurename}{Mục lục hình ảnh}}
+\AtBeginDocument{\renewcommand{\listtablename}{Mục lục bảng}}
+\AtBeginDocument{\renewcommand{\tablename}{Bảng}}
+\AtBeginDocument{\renewcommand{\figurename}{Hình}}
+\AtBeginDocument{\renewcommand{\refname}{Các nguồn tài liệu tham khảo}}
+
+\begin{document}
+\coverpage%
+
+% Mục lục
+\tableofcontents
+% \listoffigures
+% \listoftables
+% % \lstlistoflistings{}
+
+\clearpage
+
+\input{chapters/01_tong_quan}
+\input{chapters/02_hoi_quy}
+\input{chapters/03_phan_lop}
+\input{chapters/04_so_sanh}
+\input{chapters/05_tong_ket}
+
+\clearpage
+
+\phantomsection
+\addcontentsline{toc}{section}{Các nguồn tài liệu tham khảo}
+
+\bibliographystyle{plain}
+\bibliography{refs/example.bib}
+\nocite{*}
+
+\end{document}

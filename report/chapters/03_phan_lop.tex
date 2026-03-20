@@ -1,0 +1,305 @@
+\section{Phần 2 - Bài toán Phân lớp (Classification)}
+
+\subsection{Cơ sở lý thuyết}
+
+\subsubsection{Các chiến lược phân lớp và hàm phân quyết tuyến tính} 
+
+\subsubsection{Hồi quy Logistic và thuật toán tối ưu trọng số}
+
+Hồi quy Logistic (Logistic Regression) là mô hình phân lớp xác suất phân biệt (Probabilistic Discriminative Model) tiêu biểu nhất trong họ các mô hình tuyến tính \cite{bishop2006pattern}. Khác với perceptron chỉ đưa ra quyết định nhãn cứng (hard label) một cách tuyệt đối, hồi quy logistic trực tiếp mô hình hóa xác suất hậu nghiệm $p(\mathcal{C}_k | x)$. Điều này cho phép mô hình không chỉ dự đoán lớp mà còn cung cấp độ tự tin (phần trăm xác suất) cho quyết định đó.
+
+\vspace{0.5em}
+\noindent\textbf{1. Nền tảng thống kê và hàm kích hoạt trong phân lớp}
+\vspace{0.5em}
+
+Trong các bài toán phân lớp, mục tiêu cốt lõi không chỉ là vạch ra một ranh giới đúng/sai cứng nhắc, mà là ước lượng \textit{độ tự tin} của mô hình. Cụ thể, một hàm tuyến tính $a = \mathbf{w}^\top \phi(\mathbf{x})$ sẽ tính toán ra một "điểm số thô" (raw score) có thể mang giá trị bất kỳ từ $-\infty$ đến $+\infty$. 
+
+Tuy nhiên, trong thực tế, chúng ta cần một kết quả có thể diễn giải được dưới dạng tỷ lệ phần trăm (xác suất nằm trong khoảng $[0, 1]$). Để làm cầu nối giữa raw score và không gian xác suất, Hồi quy Logistic mượn ý tưởng từ mô hình tuyến tính tổng quát (Generalized Linear Models - GLMs), sử dụng các \textbf{hàm kích hoạt phi tuyến} được xây dựng dựa trên nền tảng của phân phối họ mũ đóng vai trò như những bộ lọc chuẩn hóa.
+
+Một phân phối xác suất thuộc họ mũ khi hàm khối xác suất hoặc hàm mật độ của nó có thể được biểu diễn dưới dạng tổng quát:
+\begin{equation}
+    P(y;\eta) = b(y)\exp(\eta^\top T(y) - A(\eta))
+\end{equation}
+
+Tùy thuộc vào số lượng nhóm cần phân loại ($K$), mô hình sẽ có hai cách tiếp cận chính \cite{bishop2006pattern}:
+
+\vspace{0.5em}
+\noindent\textbf{1.1. Phân lớp nhị phân ($K = 2$) và hàm Sigmoid:}
+
+Trong hồi quy logistic nhị phân, biến mục tiêu $y \in \{0, 1\}$ (ví dụ: Bệnh nhân có bệnh hoặc không có bệnh) tuân theo phân phối Bernoulli với tham số xác suất thành công là $p$. Trong thống kê, người ta thường dùng Logit -- tức là logarit của \textit{tỷ lệ chênh lệch (odds)} -- để liên kết xác suất $p$ với raw score:
+\begin{equation}
+    \eta = \text{logit}(p) = \ln\left(\frac{p}{1-p}\right) \quad \text{\cite{kleinbaum2010logistic}}
+\end{equation}
+
+Nếu ta coi raw score $a = \mathbf{w}^\top \phi(\mathbf{x})$ chính là giá trị $\eta$ này, ta có thể lật ngược công thức trên để tìm ra $p$. Kết quả thu được chính là \textbf{hàm Sigmoid}:
+\begin{equation}
+    p(\mathcal{C}_1 | \mathbf{x}) = \sigma(\mathbf{w}^\top \phi(\mathbf{x})) = \frac{1}{1 + \exp(-\mathbf{w}^\top \phi(\mathbf{x}))}
+\end{equation}
+
+Nói một cách trực quan, hàm Sigmoid sẽ "ép" mọi điểm số tuyến tính thành một đường cong hình chữ S mượt mà, giới hạn chặt chẽ trong khoảng $(0, 1)$. Nhờ đó, ta dễ dàng diễn giải kết quả đầu ra là xác suất mẫu vật thuộc về lớp mục tiêu \cite{kleinbaum2010logistic}.
+
+\vspace{0.5em}
+\noindent\textbf{1.2.  Phân lớp đa lớp ($K > 2$) và hàm Softmax:}
+
+Khi bài toán có nhiều hơn 2 lớp có tính chất loại trừ lẫn nhau (ví dụ: nhận diện chữ số từ 0 đến 9), bài toán phức tạp hơn vì mô hình phải tính điểm số riêng cho từng lớp: $a_k = \mathbf{w}_k^\top \phi(\mathbf{x})$. Nhiệm vụ lúc này là biến danh sách các điểm số độc lập này thành các xác suất sao cho tổng của chúng luôn đúng bằng $1$ ($100\%$).
+
+Giải pháp ở đây là \textbf{hàm Softmax}:
+\begin{equation}
+    p(\mathcal{C}_k | \mathbf{x}) = \frac{\exp(a_k)}{\sum_{j=1}^K \exp(a_j)}
+\end{equation}
+
+Cơ chế của Softmax rất thực tế: Đầu tiên, nó dùng hàm số mũ ($\exp$) để biến mọi điểm số (dù âm hay dương) thành một con số dương đại diện cho "sức nặng" của lớp đó. Sau đó, nó chia sức nặng của từng lớp cho tổng sức nặng của tất cả các lớp. Quá trình này không chỉ tạo ra một phân phối xác suất hợp lệ, mà còn có tính chất "khuếch đại", làm nổi bật rõ ràng lớp nào đang có điểm số áp đảo nhất \cite{bishop2006pattern, kleinbaum2010logistic}.
+
+\vspace{0.5em}
+\noindent\textbf{Ý nghĩa các ký hiệu:}
+\begin{itemize}
+    \item $p(\mathcal{C}_k | \mathbf{x})$: \textbf{Xác suất dự đoán}, thể hiện mức độ tự tin của mô hình khi xếp dữ liệu $\mathbf{x}$ vào lớp $\mathcal{C}_k$.
+    \item $y$: Biến mục tiêu thực tế quan sát được (ground truth).
+    \item $\eta$: Thông số tự nhiên (Natural parameter) đặc trưng cho phân phối họ mũ.
+    \item $\mathbf{w}, \mathbf{w}_k$: \textbf{Vector trọng số} tương ứng với lớp phân loại (bao gồm cả thành phần bias $w_0$). Yếu tố này định lượng mức độ tác động phân tích của từng đặc trưng lên tỷ lệ chênh lệch log-odds \cite{kleinbaum2010logistic}.
+    \item $\phi(\mathbf{x})$: Vector đặc trưng đầu vào (features) sau khi biến đổi.
+    \item $a, a_k$: \textbf{Điểm số thô (Raw score)}, $a = \mathbf{w}^\top \phi(\mathbf{x})$.
+     \item $\sigma(\cdot)$ và $\exp(\cdot)$: Lần lượt là hàm Sigmoid và hàm số mũ cơ số tự nhiên $e$.
+\end{itemize}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{graphics/logit_probit.png}
+    \caption{So sánh hàm Logit và Probit}
+    \label{fig:logit_probit} % Nhãn để tham chiếu ảnh trong văn bản
+\end{figure}
+
+
+\vspace{0.5em}
+\noindent\textbf{2. Ước lượng hợp lý cực đại (MLE) và hàm mất mát Cross-Entropy}
+\vspace{0.5em}
+
+Trong các bài toán hồi quy thông thường, chúng ta hay dùng sai số bình phương (MSE) để đo khoảng cách giữa dự đoán và thực tế. Tuy nhiên, khi kết hợp MSE với các hàm ép xác suất như Sigmoid hay Softmax, bề mặt không gian hàm mất mát sẽ bị bóp méo, tạo ra rất nhiều cực tiểu cục bộ. Nếu dùng MSE, mô hình của chúng ta sẽ rất dễ bị kẹt lại ở những cực tiểu này và không bao giờ tìm được nghiệm tốt nhất \cite{bishop2006pattern}.
+
+Vì vậy, hồi quy Logistic từ bỏ góc nhìn hình học của MSE và chuyển sang một góc nhìn mang tính xác suất hơn: \textit{Làm thế nào để tìm ra bộ trọng số giúp dữ liệu thực tế quan sát được trở nên "hợp lý" nhất?} Phương pháp này được gọi là \textbf{Maximum Likelihood Estimation - MLE} \cite{zhang2021dive}.
+
+Cụ thể, giả sử ta có $N$ điểm dữ liệu quan sát được. Hàm hợp lý (Likelihood) sẽ đo lường độ chính xác tổng thể bằng cách nhân tất cả các xác suất dự đoán đúng lại với nhau:
+\begin{equation}
+    \mathcal{L}(\mathbf{w}) = \prod_{n=1}^N P(t^{(n)} | \mathbf{x}^{(n)}; \mathbf{w})
+\end{equation}
+
+Nhưng trong thực hành máy tính, việc nhân hàng vạn số xác suất nhỏ bé (ví dụ $0.1 \times 0.05 \times \dots$) sẽ nhanh chóng làm máy tính bị underflow và trả về số $0$. Để giải quyết rào cản kỹ thuật này, ta lấy logarit tự nhiên để biến phép nhân thành phép cộng. Việc \textit{tối đa hóa} hàm Log-Likelihood này hóa ra lại hoàn toàn tương đương với việc \textit{tối thiểu hóa} một đại lượng suy hao nổi tiếng: \textbf{hàm mất mát Cross-Entropy} \cite{zhang2021dive}.
+
+Tùy thuộc vào bài toán phân loại, hàm Cross-Entropy được định nghĩa ở hai dạng:
+
+\vspace{0.5em}
+\noindent\textbf{2.1. Phân loại nhị phân (Binary Cross-Entropy)}
+
+Dành cho bài toán chỉ có 2 lớp. Hàm mất mát đánh giá sai số bằng cách đối chiếu xác suất dự báo của mô hình $y^{(n)}$ với nhãn thực tế $t^{(n)}$:
+\begin{equation}
+    E(\mathbf{w}) = - \frac{1}{N} \sum_{n=1}^N \left[ t^{(n)} \ln y^{(n)} + (1-t^{(n)}) \ln(1-y^{(n)}) \right]
+\end{equation}
+Trong đó, $y^{(n)} = \sigma(\mathbf{w}^\top \phi(\mathbf{x}^{(n)}))$ là xác suất dự báo lớp positive.
+
+\vspace{0.5em}
+\noindent\textbf{2.2. Phân loại đa lớp (Categorical Cross-Entropy)}
+
+Khi có $K$ lớp, nhãn thực tế được mã hóa thành một vector one-hot (chỉ vị trí lớp đúng có giá trị $1$, còn lại bằng $0$). Lúc này, hàm mất mát được mở rộng thành:
+\begin{equation}
+    E(\mathbf{w}) = - \frac{1}{N} \sum_{n=1}^N \sum_{k=1}^K t_{nk} \ln y_{nk}
+\end{equation}
+Công thức trông có vẻ phức tạp, nhưng nhờ mã hóa one-hot, cơ chế hoạt động của nó cực kỳ tối giản: Nó sẽ bỏ qua tất cả các lớp sai và chỉ tính toán mức độ suy hao dựa trên xác suất dự báo tại \textit{đúng lớp thực tế} của dữ liệu đó \cite{zhang2021dive}.
+
+\vspace{0.5em}
+\noindent\textbf{Phạt lỗi bất đối xứng theo Information Theory:}
+\begin{itemize}
+    \item Khác với các hàm suy hao tuyến tính, Cross-Entropy sử dụng phép $(-\ln)$ để tạo ra một cơ chế \textbf{phạt bất đối xứng}
+    \item Ví dụ: Nếu một hình ảnh thực chất là con chó ($t=1$), nhưng mô hình lại dự đoán xác suất là con chó chỉ có $0.0001$ (dự đoán sai nhưng lại cực kỳ tự tin mình đúng). Lúc này, giá trị phạt $-\ln(0.0001)$ sẽ bùng nổ lên một con số khổng lồ.
+    \item Sự trừng phạt nghiêm khắc đối với những lỗi "tự tin thái quá" này sẽ sinh ra một lực kéo (gradient) rất mạnh, ép bộ trọng số phải lập tức quay xe sửa sai, giúp quá trình huấn luyện diễn ra nhanh và hiệu quả hơn \cite{bishop2006pattern}.
+\end{itemize}
+
+\vspace{0.5em}
+\noindent\textbf{Ý nghĩa các ký hiệu và bản chất toán học:}
+\begin{itemize}
+    \item $E(\mathbf{w})$: Giá trị kỳ vọng của hàm mất mát (Empirical Risk) trên toàn bộ tập dữ liệu huấn luyện kích thước $N$.
+    \item $K$: Tổng số lượng phân lớp trong không gian nhãn.
+    \item $t_{nk} \in \{0, 1\}$: Nhãn thực tế được mã hóa one-hot. Giá trị $t_{nk} = 1$ nếu mẫu thứ $n$ thực sự thuộc lớp $k$, ngược lại $t_{nk} = 0$. Nhờ tính chất này, tổng suy hao đối với một mẫu chỉ phụ thuộc vào xác suất dự báo tại đúng lớp thực tế của nó \cite{zhang2021dive}.
+    \item $y_{nk}$: Xác suất hậu nghiệm do mô hình dự đoán, $y_{nk} = p(\mathcal{C}_k | \mathbf{x}^{(n)})$.
+\end{itemize}
+
+\vspace{0.5em}
+\noindent\textbf{3. Thuật toán tối ưu hóa trọng số (Optimization Algorithms)}
+\vspace{0.5em}
+
+Để tìm vector trọng số $\mathbf{w}$ tối ưu, bài toán đặt ra là cực tiểu hóa hàm Cross-Entropy. Dù áp dụng hàm liên kết Sigmoid hay Softmax, đạo hàm bậc nhất của hàm suy hao (gradient) đều rút gọn về một dạng hình thức thống nhất mang ý nghĩa thống kê \cite{bishop2006pattern}:
+\begin{equation}
+    \nabla E(\mathbf{w}) = \frac{1}{N} \sum_{n=1}^N (y_{n} - t_{n}) \phi(\mathbf{x}_n)
+\end{equation}
+
+Bản chất của vector gradient này chính là trung bình cộng của tích số giữa \textbf{sai số dự báo} $(y_n - t_n)$ và \textbf{đặc trưng đầu vào} $\phi(\mathbf{x}_n)$. Dựa trên thông tin đạo hàm, ta có hai chiến lược tối ưu hóa chủ đạo:
+
+\vspace{0.5em}
+\noindent\textit{\textbf{Chiến lược 1: Gradient Descent (Sử dụng thông tin bậc nhất)}}
+
+Thuật toán cập nhật trọng số lặp đi lặp lại ngược chiều đạo hàm (hướng dốc nhất):
+\begin{equation}
+    \mathbf{w}^{(new)} = \mathbf{w}^{(old)} - \eta \nabla E(\mathbf{w})
+\end{equation}
+với $\eta$ là tốc độ học (learning rate). Mặc dù chi phí tính toán mỗi bước lặp rất rẻ, phương pháp này chỉ khai thác "độ dốc" tuyến tính, dẫn đến tốc độ hội tụ chậm tuyến tính $\mathcal{O}(1/\varepsilon)$, đặc biệt khi bề mặt hàm lỗi bị kéo dãn (ill-conditioned).
+
+\vspace{0.5em}
+\noindent\textit{\textbf{Chiến lược 2: Thuật toán Newton-Raphson / IRLS (Sử dụng thông tin bậc hai)}}
+
+Vì hàm Cross-Entropy là một hàm lồi nghiêm ngặt (strictly convex), thuật toán Newton-Raphson tận dụng thêm ma trận Hessian $\mathbf{H}$ (chứa các đạo hàm bậc hai) để phân tích "độ cong" (curvature) của không gian tối ưu. Các phần tử của ma trận Hessian được xác định bằng:
+\begin{equation}
+    \mathbf{H} = \nabla^2 E(\mathbf{w}) = \frac{1}{N} \sum_{n=1}^N y_n(1-y_n) \phi(\mathbf{x}_n) \phi(\mathbf{x}_n)^\top
+\end{equation}
+
+Dưới dạng đại số ma trận, $\mathbf{H} = \frac{1}{N} \Phi^\top \mathbf{R} \Phi$, trong đó $\mathbf{R}$ là ma trận đường chéo chứa các phương sai $R_{nn} = y_n(1 - y_n)$. Do $\mathbf{R}$ luôn có các phần tử dương, $\mathbf{H}$ luôn là ma trận nửa xác định dương. Quy tắc cập nhật tham số trở thành:
+\begin{equation}
+    \mathbf{w}^{(new)} = \mathbf{w}^{(old)} - \mathbf{H}^{-1} \nabla E(\mathbf{w})
+\end{equation}
+
+Vì ma trận trọng số $\mathbf{R}$ thay đổi liên tục theo dự báo $y_n$ tại mỗi bước lặp, quá trình này trong thống kê được gọi là \textbf{bình phương tối thiểu có trọng số lặp (Iteratively Reweighted Least Squares - IRLS)}. Newton-Raphson có đặc tính \textbf{bất biến Affine (Affine Invariance)}, tự động điều chỉnh bước nhảy để bù đắp sự chênh lệch tỷ lệ giữa các chiều thuộc tính, mang lại tốc độ hội tụ bậc hai siêu nhanh $\mathcal{O}(\log(1/\varepsilon))$.
+
+\vspace{0.5em}
+\noindent\textbf{4. Điều chuẩn (Regularization) và xử lý quá khớp}
+\vspace{0.5em}
+
+Khi tập dữ liệu có nhiễu, số lượng đặc trưng quá lớn, hoặc xảy ra hiện tượng phân tách hoàn hảo, trọng số $\mathbf{w}$ có xu hướng tiến tới vô cùng, dẫn đến quá khớp (Overfitting). Để khắc phục, ta cộng thêm một số hạng phạt $\Omega(\mathbf{w})$ vào hàm mục tiêu:
+\begin{equation}
+    \widetilde{E}(\mathbf{w}) = E(\mathbf{w}) + \lambda \Omega(\mathbf{w})
+\end{equation}
+
+Trong đó, $\lambda$ là hệ số điều chuẩn kiểm soát mức độ phạt. Hai dạng hàm phạt phổ biến mang lại các hiệu ứng hình học khác biệt:
+\begin{itemize}
+    \item \textbf{L2 Regularization (Ridge):} $\Omega(\mathbf{w}) = \frac{1}{2} \|\mathbf{w}\|_2^2$. Phạt L2 ép các trọng số co nhỏ lại gần $0$ (weight decay). Về mặt toán học, L2 cộng thêm $\lambda \mathbf{I}$ vào ma trận Hessian ($\mathbf{H}_{reg} = \mathbf{H} + \lambda \mathbf{I}$), đảm bảo $\mathbf{H}_{reg}$ luôn xác định dương chặt và khả nghịch tuyệt đối, giúp thuật toán IRLS cực kỳ ổn định.
+    \item \textbf{L1 Regularization (Lasso):} $\Omega(\mathbf{w}) = \|\mathbf{w}\|_1$. Phạt L1 có đặc tính hình học dạng hình thoi, ép các trọng số của những đặc trưng không quan trọng về chính xác bằng $0$, tạo ra tính thưa. Do hàm trị tuyệt đối không khả vi tại gốc tọa độ, các thuật toán chuyên dụng như Proximal Gradient Descent hoặc OWL-QN phải được áp dụng.
+\end{itemize}
+
+Để hiểu rõ tại sao Lasso có thể loại bỏ đặc trưng còn Ridge thì không, chúng ta có thể nhìn vào biểu đồ hình học (Hình \ref{fig:lasso_ridge}). Các đường elip màu xanh dương là các đường đồng mức (contours) của hàm mất mát gốc, lan rộng dần từ điểm tối ưu lý tưởng $\hat{\beta}$ (khi không bị phạt). Trong khi đó, hình phạt điều chuẩn hoạt động như một "vùng giới hạn" màu xanh nhạt. Nghiệm tối ưu cuối cùng chính là điểm đầu tiên mà các đường elip này chạm vào vùng giới hạn.
+
+\begin{itemize}
+    \item \textbf{Với Lasso (L1 - Hình trái):} Vùng giới hạn là một hình thoi với các góc nhọn nằm ngay trên các trục tọa độ. Do đặc tính nhọn này, xác suất cực kỳ cao là các đường elip sẽ chạm vào vùng giới hạn ngay tại một góc (ví dụ trên trục $\beta_2$). Khi đó, trọng số còn lại ($\beta_1$) sẽ bằng đúng $0$. Đây chính là cơ chế toán học giúp Lasso chọn lọc đặc trưng \cite{plutus21_regression}.
+    \item \textbf{Với Ridge (L2 - Hình phải):} Vùng giới hạn là một hình tròn trơn tru không có góc cạnh. Do đó, điểm chạm thường nằm lơ lửng ở giữa khoảng không. Kết quả là cả hai trọng số đều bị co nhỏ lại, nhưng hiếm khi có trọng số nào bị triệt tiêu hoàn toàn về $0$.
+\end{itemize}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.85\textwidth]{graphics/lasso_ridge_contours.png} 
+    \caption{Sự hội tụ của các đường đồng mức hàm suy hao.}
+    \label{fig:lasso_ridge}
+\end{figure}
+
+\vspace{0.5em}
+\noindent\textbf{5. Các vấn đề thực thi và độ ổn định}
+\vspace{0.5em}
+
+Trong thực tế triển khai trên máy tính với độ chính xác dấu phẩy động hữu hạn, các công thức toán học lý tưởng cần được điều chỉnh:
+
+\begin{itemize}
+    \item \textbf{Log-Sum-Exp (LSE) Trick:} Phép tính lũy thừa $\exp(a_k)$ trong hàm Softmax dễ dẫn đến tràn số (overflow) và sinh ra lỗi \texttt{NaN} khi $a_k$ lớn. Kỹ thuật LSE triệt tiêu rủi ro này bằng cách tịnh tiến toàn bộ điểm số theo giá trị cực đại $M = \max_j(a_j)$:
+    \begin{equation}
+        \ln\left(\sum \exp(a_j)\right) = M + \ln\left(\sum \exp(a_j - M)\right)
+    \end{equation}
+    \item \textbf{Tối ưu hóa quy mô lớn (Large-scale Optimization):} Khi số lượng đặc trưng $d$ cực kỳ lớn, việc tính toán và nghịch đảo ma trận Hessian (độ phức tạp $\mathcal{O}(d^3)$) là bất khả thi về mặt bộ nhớ. Các hệ thống thực tế áp dụng \textbf{Hessian-Vector Product (HVP)} (tính trực tiếp tích $\mathbf{H}\mathbf{v}$ không qua ma trận trung gian) hoặc thuật toán Quasi-Newton như \textbf{L-BFGS} để xấp xỉ nghịch đảo Hessian với chi phí bộ nhớ chỉ tuyến tính $\mathcal{O}(d)$.
+\end{itemize}
+
+\subsubsection{Mô hình sinh phân biệt: Fisher's LDA và Gaussian Generative (QDA)}
+
+\subsubsection{Thuật toán Perceptron và nền tảng phân lớp}
+
+Thuật toán Perceptron, được đề xuất bởi nhà tâm lý học Frank Rosenblatt vào năm 1958, là một trong những mô hình học máy lâu đời nhất và đóng vai trò nền tảng kiến tạo nên các mạng nơ-ron sâu (Deep Neural Networks) hiện đại \cite{goodfellow2016deep}. Thuật toán này áp dụng chiến lược hàm phân quyết (Discriminant Functions), hướng tới việc học trực tiếp phương trình của một siêu phẳng (hyperplane) nhằm chia cắt không gian dữ liệu thành hai nửa hoàn toàn biệt lập mà không cần quan tâm đến xác suất phức tạp.
+
+\vspace{0.5em}
+\noindent\textbf{1. Bài toán và hàm phân quyết tuyến tính}
+\vspace{0.5em}
+
+Đối với bài toán phân lớp nhị phân, ta quy ước không gian nhãn mục tiêu mang tính đối xứng $t \in \{-1, +1\}$ tương ứng với hai lớp dữ liệu. Hàm phân quyết của Perceptron hoạt động như một ngưỡng kích hoạt cứng (hard threshold): nó tính tổng có trọng số của các đặc trưng đầu vào, sau đó dùng hàm bước (step function) để bóp giá trị về một trong hai nhãn \cite{bishop2006pattern}:
+\begin{equation}
+    y(x) = f(w^\top \phi(x))
+\end{equation}
+Trong đó:
+\begin{itemize}
+    \item $x$: Vector dữ liệu đầu vào.
+    \item $\phi(x)$: Vector đặc trưng sau khi qua phép biến đổi. Trong thực hành, ta thường ghép thêm thành phần tự do (bias) $\phi_0(x) = 1$ để mô hình có thể dịch chuyển siêu phẳng ranh giới ra khỏi gốc tọa độ.
+    \item $w$: Vector trọng số (weights). Về mặt hình học, đây chính là vector pháp tuyến xác định độ nghiêng và hướng của siêu phẳng phân tách.
+    \item $f(\cdot)$: Hàm kích hoạt dạng bước, quy ước $f(a) = +1$ nếu $a \ge 0$ và $f(a) = -1$ nếu $a < 0$.
+\end{itemize}
+
+\vspace{0.5em}
+\noindent\textbf{2. Hàm mất mát Perceptron}
+\vspace{0.5em}
+
+Cách đơn giản nhất để đánh giá mô hình là "đếm tổng số điểm bị phân loại sai". Tuy nhiên, hàm đếm này có đồ thị dạng bậc thang, dẫn đến đạo hàm của nó bằng $0$ ở hầu hết mọi nơi. Nếu đạo hàm bằng $0$, thuật toán sẽ bị "mù" và không biết phải cập nhật trọng số theo hướng nào \cite{bishop2006pattern}.
+
+Do đó, Rosenblatt đề xuất một hàm thay thế thông minh hơn gọi là \textbf{Hàm mất mát Perceptron} $E_P(w)$. Dựa vào quy ước nhãn, nếu máy đoán sai, tích số giữa raw score $w^\top \phi(x_n)$ và nhãn thực tế $t_n$ chắc chắn sẽ là một số âm. Ta đặt dấu trừ ra phía trước để biến đại lượng này thành một giá trị dương đại diện cho "khoảng cách lấn tuyến" của điểm dữ liệu đó:
+\begin{equation}
+    E_P(w) = - \sum_{n \in \mathcal{M}} w^\top \phi(x_n) t_n
+\end{equation}
+Trong đó:
+\begin{itemize}
+    \item $E_P(w)$: Tổng giá trị hàm mất mát. Hàm này tạo ra một "độ dốc" (gradient) liên tục giúp thuật toán dễ dàng tối ưu hóa. Nó bằng $0$ khi không còn điểm nào bị phân lớp sai.
+    \item $\mathcal{M}$: Tập hợp các mẫu dữ liệu \textbf{đang bị phân lớp sai}. Perceptron rất tối ưu về mặt tính toán vì nó hoàn toàn bỏ qua những điểm đã được đoán đúng.
+\end{itemize}
+
+\vspace{0.5em}
+\noindent\textbf{3. Cập nhật trọng số bằng đạo hàm ngẫu nhiên}
+\vspace{0.5em}
+
+Thuật toán sử dụng phương pháp giảm đạo hàm ngẫu nhiên (Stochastic Gradient Descent). Đạo hàm bậc nhất của hàm mất mát theo trọng số $w$ chỉ phụ thuộc vào các điểm sai:
+\begin{equation}
+    \nabla E_P(w) = - \sum_{n \in \mathcal{M}} \phi(x_n) t_n
+\end{equation}
+
+Dựa trên đạo hàm này, tại mỗi bước lặp, thuật toán duyệt qua từng mẫu $x_n$. Ngay khi phát hiện mẫu bị phân lớp sai, nó lập tức cập nhật trọng số để sửa chữa:
+\begin{equation}
+    w^{(new)} = w^{(old)} - \eta \nabla E_P(w) = w^{(old)} + \eta \phi(x_n) t_n
+\end{equation}
+Trong đó:
+\begin{itemize}
+    \item $w^{(old)}, w^{(new)}$: Vector trọng số trước và sau khi được cập nhật.
+    \item $\eta$: Hệ số học (learning rate), kiểm soát độ lớn của bước nhảy (thường chọn $\eta = 1$). 
+\end{itemize}
+
+\textbf{Sự tinh tế về mặt hình học:} Quá trình này không phải là những phép toán vô hồn. Nếu một điểm thuộc lớp dương ($+1$) bị máy đoán thành lớp âm, công thức trên sẽ \textit{cộng trực tiếp} tọa độ của điểm đó vào vector $w$. Điều này khiến siêu phẳng bị bẻ cong và xoay hướng về phía điểm dữ liệu bị sai, giúp nó được phân loại đúng ở lần lặp tiếp theo.
+
+\vspace{0.5em}
+\noindent\textbf{4. Định lý hội tụ và hạn chế thực tiễn}
+\vspace{0.5em}
+
+Về mặt lý thuyết, \textbf{Định lý hội tụ Perceptron} là một kết quả toán học đẹp mắt: Nó đảm bảo rằng nếu dữ liệu hoàn toàn có thể phân tách tuyến tính (linearly separable), thuật toán chắc chắn sẽ hội tụ và tìm ra nghiệm hoàn hảo trong một số hữu hạn bước lặp \cite{bishop2006pattern}.
+
+Tuy nhiên, trong thực tiễn, dữ liệu hiếm khi hoàn hảo mà thường chứa nhiễu (outliers) hoặc các cấu trúc phân bố đan xen (như bài toán XOR). Trái ngược với Hồi quy Logistic có thể tìm ra ranh giới "tương đối tốt nhất", nếu dữ liệu không phân tách tuyến tính, thuật toán Perceptron nguyên bản sẽ dao động không ngừng và rơi vào vòng lặp vô hạn.
+
+\vspace{0.5em}
+\noindent\textbf{5. Biến thể Pocket Perceptron (Xử lý dữ liệu nhiễu)}
+\vspace{0.5em}
+
+Để khắc phục nhược điểm chí mạng kể trên, biến thể \textbf{Pocket Algorithm} thường được kết hợp khi cài đặt Perceptron trong thực tế. Cơ chế hoạt động của nó rất trực quan: 
+Ngoài vector trọng số $w$ đang được cập nhật liên tục, thuật toán duy trì thêm một "chiếc túi" (pocket) trong bộ nhớ để cất giữ vector trọng số $w_{best}$. Sau mỗi vòng lặp, nếu $w$ hiện tại tạo ra ít lỗi phân loại trên toàn tập dữ liệu hơn so với $w_{best}$, ta sẽ cập nhật $w_{best} = w$. Quá trình được ép dừng lại (early stopping) sau một số vòng lặp tối đa cố định, và mô hình sẽ trả về $w_{best}$ làm kết quả cuối cùng. Điều này giúp Perceptron vẫn hoạt động hiệu quả và có sức chịu đựng tốt ngay cả trên các tập dữ liệu nhiễu.
+
+\subsubsection{[Nâng cao] Mô hình Probit và xấp xỉ Laplace}
+
+\subsubsection{[Nâng cao] Kernel Logistic Regression và Gaussian Naive Bayes}
+
+\subsubsection{[Nâng cao] Năng lực tổng quát hóa và VC Dimension}
+
+\subsection{Khám phá và tiền xử lý dữ liệu}
+\subsubsection{Mô tả bộ dữ liệu và Ý nghĩa thống kê}
+
+\subsubsection{Phân tích phân bố lớp và Vấn đề mất cân bằng dữ liệu}
+
+\subsection{Xây dựng mô hình và Cài đặt Thực nghiệm}
+
+\subsection{Đánh giá mô hình và Thảo luận}
+
+\subsubsection{Kết quả K-fold CV và Các độ đo (Accuracy, Precision, Recall, F1, ROC/AUC)}
+
+Ma trận nhầm lẫn (Confusion Matrix) cho thấy khả năng phân loại của mô hình:
+
+\begin{itemize}
+    \item \textbf{Accuracy:} Tỉ lệ dự đoán đúng trên tổng số mẫu.
+    \item \textbf{F1-score:} Trung bình điều hòa giữa Precision và Recall.
+\end{itemize}
+
+\subsubsection{Kiểm định McNemar's Test và Biểu đồ tin cậy (Reliability Diagram)}
+
+\subsubsection{Phân tích ranh giới quyết định (Decision Boundaries) và Phân tích lỗi}
+
+\clearpage
