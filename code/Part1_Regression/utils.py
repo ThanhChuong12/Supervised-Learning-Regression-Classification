@@ -1,6 +1,5 @@
 
 import numpy as np
-from sklearn.preprocessing import SplineTransformer
 
 
 def sigmoid(z: np.ndarray) -> np.ndarray:
@@ -59,19 +58,35 @@ def spline_features(
     n_knots: int,
     degree: int = 3,
     *,
-    transformer: SplineTransformer | None = None,
+    transformer: dict | None = None,
     fit: bool = False,
-) -> tuple[np.ndarray, SplineTransformer]:
-    if transformer is None:
-        transformer = SplineTransformer(
-            n_knots=int(n_knots),
-            degree=int(degree),
-            include_bias=False,
-            extrapolation='constant',
-        )
-        fit = True
+) -> tuple[np.ndarray, dict]:
+    """Cubic spline basis (truncated power basis) implemented from scratch."""
+    N, D = X_s.shape
+    if transformer is None or fit:
+        # Generate interior knots based on quantiles
+        knots = []
+        for d in range(D):
+            q = np.linspace(0, 1, n_knots + 2)[1:-1]
+            k_d = np.quantile(X_s[:, d], q)
+            knots.append(k_d)
+        transformer = {'knots': knots, 'degree': degree}
 
-    Z = transformer.fit_transform(X_s) if fit else transformer.transform(X_s)
+    knots = transformer['knots']
+    degree_actual = transformer['degree']
+    
+    parts = []
+    for d in range(D):
+        x = X_s[:, d:d+1] # (N, 1)
+        for p in range(2, degree_actual + 1):
+            parts.append(x ** p)
+        
+        k_d = knots[d]
+        for k in k_d:
+            trunc = np.maximum(0, x - k) ** degree_actual
+            parts.append(trunc)
+            
+    Z = np.hstack(parts) if parts else np.zeros((N, 0))
     return Z.astype(float), transformer
 
 
@@ -239,3 +254,48 @@ def metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
     ss_tot = float(np.sum((y_true - np.mean(y_true)) ** 2))
     r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else float('nan')
     return {'RMSE': rmse, 'MAE': mae, 'R2': r2}
+
+def mse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    y_true = y_true.astype(float)
+    y_pred = y_pred.astype(float)
+    return float(np.mean((y_true - y_pred) ** 2))
+
+def add_bias(X_like: np.ndarray) -> np.ndarray:
+    return np.hstack([np.ones((X_like.shape[0], 1), dtype=float), X_like])
+
+def select_feature_groups(names: list[str]) -> dict[str, list[int]]:
+    idx = {n: i for i, n in enumerate(names)}
+
+    def pick(prefix: str) -> list[int]:
+        return [i for n, i in idx.items() if n.startswith(prefix)]
+
+    groups: dict[str, list[int]] = {}
+    groups['lights'] = [idx['lights']] if 'lights' in idx else []
+    groups['temp_indoor'] = pick('T')
+    if 'T_out' in idx and idx['T_out'] in groups['temp_indoor']:
+        groups['temp_indoor'].remove(idx['T_out'])
+        groups['temp_outdoor'] = [idx['T_out']]
+    else:
+        groups['temp_outdoor'] = []
+
+    groups['humidity'] = pick('RH_')
+    if 'RH_out' in idx:
+        groups['humidity_outdoor'] = [idx['RH_out']]
+    else:
+        groups['humidity_outdoor'] = []
+
+    for k in ['Press_mm_hg', 'Windspeed', 'Visibility', 'Tdewpoint', 'rv1', 'rv2']:
+        groups[k] = [idx[k]] if k in idx else []
+
+    return {g: cols for g, cols in groups.items() if len(cols) > 0}
+
+def interaction_terms(X_s: np.ndarray, cols: list[int]) -> np.ndarray:
+    cols = list(cols)
+    k = len(cols)
+    if k < 2:
+        return np.zeros((X_s.shape[0], 0), dtype=float)
+    inter = []
+    for a in range(k):
+        for b in range(a + 1, k):
+            inter.append((X_s[:, cols[a]] * X_s[:, cols[b]])[:, None])
+    return np.hstack(inter)
