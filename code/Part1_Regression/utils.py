@@ -1,6 +1,207 @@
 
 import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.model_selection import KFold
 
+def soft_threshold(rho: float, lam: float) -> float:
+    # ép trọng số của các đặc trưng không quan trọng về 0
+    if rho < -lam:
+        return rho + lam
+    elif rho > lam:
+        return rho - lam
+    else:
+        return 0.0
+
+def fit_lasso_cd(Phi: np.ndarray, y: np.ndarray, lam: float, num_iters: int = 1000, tol: float = 1e-4, bias_is_first: bool = True, w_init: np.ndarray = None) -> np.ndarray:
+    n_samples, n_features = Phi.shape
+    
+    # Dùng w_init nếu có, ngược lại tạo mảng 0
+    w = np.zeros(n_features) if w_init is None else w_init.copy()
+    
+    # z là tổng bình phương các phần tử trên từng cột của ma trận Phi
+    z = np.sum(Phi**2, axis=0)
+    
+    for _ in range(num_iters):
+        w_old = w.copy()
+        
+        for j in range(n_features):
+            if z[j] == 0:
+                continue
+            
+            # tính sai số dự đoán hiện tại
+            y_pred = Phi @ w
+            
+            # rho_j là độ tương quan giữa đặc trưng j và sai số (khi tạm bỏ w_j)
+            rho_j = Phi[:, j].T @ (y - y_pred) + w[j] * z[j]
+            
+            # cột đầu tiên (bias) không bị phạt, các cột khác sẽ đi qua bộ lọc soft threshold
+            if bias_is_first and j == 0:
+                w[j] = rho_j / z[j]  
+            else:
+                w[j] = soft_threshold(rho_j, lam) / z[j]
+                
+        # dừng thuật toán nếu mức độ thay đổi của w quá nhỏ (đã hội tụ)
+        if np.max(np.abs(w - w_old)) < tol:
+            break
+            
+    return w
+
+def fit_ridge(Phi: np.ndarray, y: np.ndarray, lam: float, bias_is_first: bool = True) -> np.ndarray:
+    # p là số lượng đặc trưng của ma trận đầu vào
+    P = Phi.shape[1]
+    
+    # tính phần lõi của phương trình chuẩn (normal equation)
+    A = Phi.T @ Phi
+    
+    # tạo ma trận đường chéo chứa các hệ số phạt lambda
+    reg = lam * np.eye(P)
+    
+    # không áp dụng hình phạt l2 lên hệ số tự do (bias) ở vị trí đầu tiên
+    if bias_is_first:
+        reg[0, 0] = 0.0
+        
+    # tìm trọng số w bằng cách giải hệ phương trình tuyến tính
+    return np.linalg.solve(A + reg, Phi.T @ y)
+
+def time_series_cv_indices(n_samples: int, k: int = 10, random_seed: int = 42):
+    # Chia dữ liệu làm (k + 1) phần bằng nhau
+    chunk_size = n_samples // (k + 1)
+    
+    folds = []
+    
+    for i in range(1, k + 1):
+        # Tập Train: Từ đầu cho đến chunk hiện tại 
+        train_end = i * chunk_size
+        train_idx = np.arange(0, train_end)
+        
+        # Tập Validation
+        val_end = (i + 1) * chunk_size if i < k else n_samples
+        val_idx = np.arange(train_end, val_end)
+        
+        folds.append((train_idx, val_idx))
+        
+    return folds
+
+def kfold_cv_lasso(Phi: np.ndarray, y: np.ndarray, lambdas: list, k: int = 10):
+    # sắp xếp lambda giảm dần để warm start hiệu quả
+    lambdas = sorted(lambdas, reverse=True)
+    
+    # gọi hàm chia index
+    folds = kfold_indices(len(Phi), k=k)
+    
+    cv_errors = []
+    
+    # tạo danh sách lưu trọng số w khởi tạo cho từng fold.
+    # vì có k fold, ta cần k vạch xuất phát khác nhau. ban đầu tất cả là None (sẽ khởi tạo w=0)
+    w_inits = [None] * k
+    
+    for lam in lambdas:
+        fold_errors = []
+        
+        for i, (train_idx, val_idx) in enumerate(folds):
+            Phi_tr, y_tr = Phi[train_idx], y[train_idx]
+            Phi_va, y_va = Phi[val_idx], y[val_idx]
+            
+            # fit mô hình với Warm Start: truyền w_inits[i] của vòng lambda trước vào
+            w = fit_lasso_cd(Phi_tr, y_tr, lam, w_init=w_inits[i])
+            
+            # cập nhật lại vạch xuất phát cho fold thứ i để dùng cho mức lambda tiếp theo
+            w_inits[i] = w.copy()
+            
+            # tính lỗi trên tập Validation
+            y_pred = Phi_va @ w
+            mse = np.mean((y_va - y_pred)**2)
+            fold_errors.append(mse)
+            
+        # lưu lỗi trung bình của k folds tại mức lambda hiện tại
+        cv_errors.append(np.mean(fold_errors))
+        
+    # tìm lambda có lỗi validation trung bình nhỏ nhất
+    best_idx = np.argmin(cv_errors)
+    best_lam = lambdas[best_idx]
+    
+    return best_lam, cv_errors, lambdas
+
+
+def fit_elastic_net_cd(Phi: np.ndarray, y: np.ndarray, lam1: float, lam2: float, num_iters: int = 1000, tol: float = 1e-4, bias_is_first: bool = True) -> np.ndarray:
+    # cài đặt elastic net bằng coordinate descent
+    n_samples, n_features = Phi.shape
+    w = np.zeros(n_features)
+    
+    # z là tổng bình phương các phần tử trên từng cột
+    z = np.sum(Phi**2, axis=0)
+    
+    for _ in range(num_iters):
+        w_old = w.copy()
+        
+        for j in range(n_features):
+            if z[j] == 0: continue
+            
+            # tính sai số dự đoán hiện tại
+            y_pred = Phi @ w
+            
+            # rho_j là độ tương quan giữa đặc trưng j và phần sai số
+            rho_j = Phi[:, j].T @ (y - y_pred) + w[j] * z[j]
+            
+            if bias_is_first and j == 0:
+                # hệ số tự do không bị phạt
+                w[j] = rho_j / z[j]
+            else:
+                # tử số là l1, mẫu số cộng thêm l2 
+                w[j] = soft_threshold(rho_j, lam1) / (z[j] + lam2)
+                
+        # dừng thuật toán nếu trọng số gần như không đổi
+        if np.max(np.abs(w - w_old)) < tol: break
+        
+    return w
+
+def forward_selection(Phi_train, y_train, Phi_val, y_val, k_features, lam=0.1):
+    selected = [0] # luôn giữ lại cột bias (cột 0)
+    remaining = list(range(1, Phi_train.shape[1]))
+    
+    for _ in range(k_features):
+        best_feature = None
+        best_error = float("inf")
+        
+        for f in remaining:
+            trial = selected + [f]
+            # Fit mô hình trên tập train
+            w = fit_ridge(Phi_train[:, trial], y_train, lam)
+            # Dự đoán và tính lỗi trên tập validation
+            y_pred_val = Phi_val[:, trial] @ w
+            error = np.mean((y_val - y_pred_val)**2)
+            
+            if error < best_error:
+                best_error = error
+                best_feature = f
+                
+        selected.append(best_feature)
+        remaining.remove(best_feature)
+        
+    return selected
+
+def backward_elimination(Phi_train, y_train, Phi_val, y_val, target_features, lam=0.1):
+    features = list(range(Phi_train.shape[1]))
+    
+    while len(features) > target_features:
+        best_error = float("inf")
+        worst_feature = None
+        
+        for f in features:
+            if f == 0: continue 
+                
+            trial = [x for x in features if x != f]
+            w = fit_ridge(Phi_train[:, trial], y_train, lam)
+            y_pred_val = Phi_val[:, trial] @ w
+            error = np.mean((y_val - y_pred_val)**2)
+            
+            if error < best_error:
+                best_error = error
+                worst_feature = f
+                
+        features.remove(worst_feature)
+        
+    return features
 
 def sigmoid(z: np.ndarray) -> np.ndarray:
     z = np.clip(z, -50, 50)
@@ -227,14 +428,6 @@ def evaluate_configs(
         }
 
     return results
-def fit_ridge(Phi: np.ndarray, y: np.ndarray, lam: float, bias_is_first: bool = True) -> np.ndarray:
-    P = Phi.shape[1]
-    A = Phi.T @ Phi
-    reg = lam * np.eye(P)
-    if bias_is_first:
-        reg[0, 0] = 0.0
-    return np.linalg.solve(A + reg, Phi.T @ y)
-
 
 def fit_ridge_closed_form(Phi: np.ndarray, y: np.ndarray, lam: float, bias_is_first: bool = True) -> np.ndarray:
     return fit_ridge(Phi, y, lam, bias_is_first=bias_is_first)
