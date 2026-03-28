@@ -492,3 +492,135 @@ def interaction_terms(X_s: np.ndarray, cols: list[int]) -> np.ndarray:
         for b in range(a + 1, k):
             inter.append((X_s[:, cols[a]] * X_s[:, cols[b]])[:, None])
     return np.hstack(inter)
+
+
+# LINEAR REGRESSION IMPLEMENTATIONS (OLS, Mini-batch GD, WLS)
+
+def fit_ols(Phi: np.ndarray, y: np.ndarray, bias_is_first: bool = True) -> np.ndarray:
+    # Normal Equations: w = (Phi^T Phi)^(-1) Phi^T y
+    PhiT_Phi = Phi.T @ Phi
+    PhiT_y = Phi.T @ y
+    
+    # Solve linear system instead of computing inverse for numerical stability
+    w = np.linalg.solve(PhiT_Phi, PhiT_y)
+    
+    return w
+
+
+def step_decay_schedule(epoch: int, initial_lr: float, drop_rate: float = 0.5, 
+                        epochs_drop: int = 10) -> float:
+    return initial_lr * (drop_rate ** np.floor(epoch / epochs_drop))
+
+
+def cosine_annealing_schedule(epoch: int, initial_lr: float, T_max: int) -> float:
+    return initial_lr * 0.5 * (1 + np.cos(np.pi * epoch / T_max))
+
+
+def fit_ols_minibatch_gd(Phi: np.ndarray, y: np.ndarray, 
+                         lr_schedule: str = 'step_decay',
+                         initial_lr: float = 0.01,
+                         batch_size: int = 32,
+                         num_epochs: int = 100,
+                         bias_is_first: bool = True,
+                         drop_rate: float = 0.5,
+                         epochs_drop: int = 10) -> tuple:
+    N, D = Phi.shape
+    w = np.zeros(D)
+    loss_history = []
+    
+    for epoch in range(num_epochs):
+        # Get learning rate for current epoch
+        if lr_schedule == 'step_decay':
+            lr = step_decay_schedule(epoch, initial_lr, drop_rate, epochs_drop)
+        elif lr_schedule == 'cosine_annealing':
+            lr = cosine_annealing_schedule(epoch, initial_lr, num_epochs)
+        else:
+            lr = initial_lr
+        
+        # Shuffle data
+        indices = np.random.permutation(N)
+        Phi_shuffled = Phi[indices]
+        y_shuffled = y[indices]
+        
+        # Mini-batch gradient descent
+        for i in range(0, N, batch_size):
+            batch_end = min(i + batch_size, N)
+            Phi_batch = Phi_shuffled[i:batch_end]
+            y_batch = y_shuffled[i:batch_end]
+            
+            # Compute gradient: grad = -2/n * Phi^T (y - Phi w)
+            predictions = Phi_batch @ w
+            errors = y_batch - predictions
+            gradient = -2.0 / len(y_batch) * (Phi_batch.T @ errors)
+            
+            # Update weights
+            w = w - lr * gradient
+        
+        # Compute epoch loss
+        y_pred = Phi @ w
+        epoch_loss = np.mean((y - y_pred) ** 2)
+        loss_history.append(epoch_loss)
+    
+    return w, loss_history
+
+
+def compute_residuals(y_true: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
+    return y_true - y_pred
+
+
+def breusch_pagan_test(Phi: np.ndarray, residuals: np.ndarray) -> float:
+    from scipy import stats
+    
+    N = len(residuals)
+    
+    # Step 1: Compute squared residuals
+    residuals_squared = residuals ** 2
+    
+    # Step 2: Regress squared residuals on original features
+    # Normalize squared residuals by their mean
+    sigma_squared = np.mean(residuals_squared)
+    normalized_residuals_sq = residuals_squared / sigma_squared
+    
+    # Fit auxiliary regression
+    w_aux = fit_ols(Phi, normalized_residuals_sq, bias_is_first=True)
+    fitted_values = Phi @ w_aux
+    
+    # Step 3: Compute test statistic
+    # LM = N * R^2 from auxiliary regression
+    ss_total = np.sum((normalized_residuals_sq - np.mean(normalized_residuals_sq)) ** 2)
+    ss_residual = np.sum((normalized_residuals_sq - fitted_values) ** 2)
+    r_squared = 1 - (ss_residual / ss_total) if ss_total > 0 else 0
+    
+    lm_statistic = N * r_squared
+    
+    # Step 4: Compare to chi-square distribution
+    # Degrees of freedom = number of features (excluding bias)
+    df = Phi.shape[1] - 1
+    p_value = 1 - stats.chi2.cdf(lm_statistic, df)
+    
+    return p_value
+
+
+def estimate_weights_from_residuals(residuals: np.ndarray, epsilon: float = 1e-6) -> np.ndarray:
+    # Weights are inversely proportional to squared residuals
+    weights = 1.0 / (residuals ** 2 + epsilon)
+    
+    # Normalize weights to have mean = 1
+    weights = weights / np.mean(weights)
+    
+    return weights
+
+
+def fit_wls(Phi: np.ndarray, y: np.ndarray, weights: np.ndarray, 
+            bias_is_first: bool = True) -> np.ndarray:
+    # Create diagonal weight matrix
+    W = np.diag(np.sqrt(weights))
+    
+    # Transform features and targets: Phi_w = W @ Phi, y_w = W @ y
+    Phi_weighted = W @ Phi
+    y_weighted = W @ y
+    
+    # Solve weighted normal equations: w = (Phi_w^T Phi_w)^(-1) Phi_w^T y_w
+    w = fit_ols(Phi_weighted, y_weighted, bias_is_first=bias_is_first)
+    
+    return w
