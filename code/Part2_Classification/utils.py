@@ -1,6 +1,6 @@
 import numpy as np
 import time
-from typing import Optional, List
+from typing import List, Tuple, Optional, Type
 
 class Perceptron:
     """
@@ -137,252 +137,310 @@ class LogisticRegression:
         return np.where(y_pred_prob >= threshold, 1, 0)
     
 
-
-# Advanced Logistic Regression with support for both Gradient Descent and Newton-Raphson optimization methods.
+# BINARY LOGISTIC REGRESSION
 class BinaryLogisticRegression:
     """
-    Binary Logistic Regression classifier from scratch.
-    Supports Gradient Descent ('gd') and Newton-Raphson ('newton') optimization.
+    Binary Logistic Regression with:
+    - Gradient Descent (GD)
+    - Newton-Raphson (via Hessian-Free Conjugate Gradient)
     """
-    def __init__(self, method: str = 'gd', learning_rate: float = 0.01, 
-                 max_iter: int = 1000, tol: float = 1e-5, 
-                 fit_intercept: bool = True, verbose: bool = False):
-        if method not in ['gd', 'newton']:
-            raise ValueError("Method must be either 'gd' or 'newton'.")
-        
+
+    def __init__(
+        self,
+        method: str = 'gd',
+        learning_rate: float = 0.01,
+        max_iter: int = 1000,
+        tol: float = 1e-5,
+        fit_intercept: bool = True,
+        verbose: bool = False
+    ):
         self.method = method
         self.lr = learning_rate
         self.max_iter = max_iter
         self.tol = tol
         self.fit_intercept = fit_intercept
         self.verbose = verbose
-        
+
         self.w: Optional[np.ndarray] = None
         self.loss_history: List[float] = []
         self.time_history: List[float] = []
 
     def _add_intercept(self, X: np.ndarray) -> np.ndarray:
-        """Appends a column of ones to X for the bias term."""
         if self.fit_intercept:
-            intercept = np.ones((X.shape[0], 1))
-            return np.concatenate((intercept, X), axis=1)
+            return np.c_[np.ones(X.shape[0]), X]
         return X
 
-    def _sigmoid(self, z: np.ndarray) -> np.ndarray:
-        """Sigmoid activation function with numerical stability."""
-        return 1 / (1 + np.exp(-np.clip(z, -250, 250)))
+    @staticmethod
+    def _sigmoid(z: np.ndarray) -> np.ndarray:
+        """Numerically stable sigmoid (branch-wise)."""
+        return np.piecewise(
+            z,
+            [z > 0],
+            [lambda x: 1 / (1 + np.exp(-x)),
+             lambda x: np.exp(x) / (1 + np.exp(x))]
+        )
 
-    def _compute_loss(self, y: np.ndarray, y_pred: np.ndarray) -> float:
-        """Computes the binary cross-entropy loss."""
-        eps = 1e-15 # Prevent log(0)
-        y_pred = np.clip(y_pred, eps, 1 - eps)
-        return -np.mean(y * np.log(y_pred) + (1 - y) * np.log(1 - y_pred))
+    @staticmethod
+    def _compute_loss(y: np.ndarray, z: np.ndarray) -> float:
+        """
+        Stable binary cross-entropy using log-sum-exp trick.
+        """
+        loss = np.maximum(z, 0) - z * y + np.log1p(np.exp(-np.abs(z)))
+        return np.mean(loss)
+
+    def _hvp(
+        self,
+        X: np.ndarray,
+        R_diag: np.ndarray,
+        v: np.ndarray,
+        reg: float = 1e-5
+    ) -> np.ndarray:
+        """
+        Hessian-vector product (H * v).
+        """
+        N = X.shape[0]
+        return (X.T @ (R_diag * (X @ v))) / N + reg * v
+
+    def _conjugate_gradient(
+        self,
+        X: np.ndarray,
+        R_diag: np.ndarray,
+        b: np.ndarray,
+        tol: float = 1e-5,
+        max_iter: int = 50
+    ) -> np.ndarray:
+        """
+        Solve Hx = b using Conjugate Gradient without explicit Hessian.
+        """
+        x = np.zeros_like(b)
+        r = b - self._hvp(X, R_diag, x)
+        p = r.copy()
+        rsold = r.T @ r
+        for _ in range(max_iter):
+            Ap = self._hvp(X, R_diag, p)
+            alpha = rsold / (p.T @ Ap + 1e-10)
+            x += alpha * p
+            r -= alpha * Ap
+            rsnew = r.T @ r
+            if np.sqrt(rsnew) < tol:
+                break
+            p = r + (rsnew / rsold) * p
+            rsold = rsnew
+        return x
 
     def fit(self, X: np.ndarray, y: np.ndarray):
-        """Fits the model to the training data."""
-        X_processed = self._add_intercept(X)
-        N, d = X_processed.shape
+        X = self._add_intercept(X)
+        N, d = X.shape
         self.w = np.zeros(d)
-        
-        start_time = time.time()
         self.loss_history = []
         self.time_history = []
-
+        start_time = time.time()
         for i in range(self.max_iter):
-            # Forward pass
-            z = X_processed @ self.w
+            z = X @ self.w
             y_pred = self._sigmoid(z)
-            
-            # Record metrics
-            current_loss = self._compute_loss(y, y_pred)
-            self.loss_history.append(current_loss)
+            loss = self._compute_loss(y, z)
+            self.loss_history.append(loss)
             self.time_history.append(time.time() - start_time)
 
-            # Check convergence
-            if i > 0 and abs(self.loss_history[-2] - current_loss) < self.tol:
+            # Convergence check
+            if i > 0 and abs(self.loss_history[-2] - loss) < self.tol:
                 if self.verbose:
-                    print(f"[{self.method.upper()}] Converged at epoch {i}")
+                    print(f"[{self.method.upper()}] Converged at iteration {i}")
                 break
+            gradient = (X.T @ (y_pred - y)) / N
 
-            # Backward pass & Update
-            gradient = (X_processed.T @ (y_pred - y)) / N
-            
             if self.method == 'gd':
                 self.w -= self.lr * gradient
-                
             elif self.method == 'newton':
-                # Optimized Hessian computation using broadcasting to avoid NxN matrix
                 R_diag = y_pred * (1 - y_pred)
-                Hessian = (X_processed.T * R_diag) @ X_processed / N
-                
-                # Add L2 regularization jitter to Hessian for numerical stability (non-singular)
-                Hessian += np.eye(d) * 1e-5 
-                
-                try:
-                    delta = np.linalg.solve(Hessian, gradient)
-                except np.linalg.LinAlgError:
-                    delta = np.linalg.pinv(Hessian) @ gradient
-                    
-                self.w -= delta # Newton step size is exactly 1
-
+                delta = self._conjugate_gradient(X, R_diag, gradient)
+                self.w -= delta
         return self
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
-        X_processed = self._add_intercept(X)
-        return self._sigmoid(X_processed @ self.w)
+        return self._sigmoid(self._add_intercept(X) @ self.w)
 
     def predict(self, X: np.ndarray, threshold: float = 0.5) -> np.ndarray:
         return (self.predict_proba(X) >= threshold).astype(int)
 
-
+# SOFTMAX REGRESSION (MULTICLASS)
 class SoftmaxRegression:
     """
-    Multinomial Logistic Regression (Softmax) from scratch using Gradient Descent.
+    Multiclass Logistic Regression using Softmax with Log-Sum-Exp stability.
     """
-    def __init__(self, learning_rate: float = 0.01, max_iter: int = 1000, 
-                 tol: float = 1e-5, fit_intercept: bool = True, verbose: bool = False):
+
+    def __init__(
+        self,
+        learning_rate: float = 0.01,
+        max_iter: int = 1000,
+        tol: float = 1e-5,
+        fit_intercept: bool = True,
+        verbose: bool = False
+    ):
         self.lr = learning_rate
         self.max_iter = max_iter
         self.tol = tol
         self.fit_intercept = fit_intercept
         self.verbose = verbose
-        
         self.W: Optional[np.ndarray] = None
+        self.classes_: Optional[np.ndarray] = None
         self.loss_history: List[float] = []
         self.time_history: List[float] = []
-        self.classes_: Optional[np.ndarray] = None
 
     def _add_intercept(self, X: np.ndarray) -> np.ndarray:
         if self.fit_intercept:
-            intercept = np.ones((X.shape[0], 1))
-            return np.concatenate((intercept, X), axis=1)
+            return np.c_[np.ones(X.shape[0]), X]
         return X
 
-    def _softmax(self, z: np.ndarray) -> np.ndarray:
-        """Softmax transformation with max-subtraction for numerical stability."""
-        exp_z = np.exp(z - np.max(z, axis=1, keepdims=True))
-        return exp_z / np.sum(exp_z, axis=1, keepdims=True)
+    @staticmethod
+    def _logsumexp(Z: np.ndarray) -> np.ndarray:
+        """Stable log-sum-exp computation."""
+        M = np.max(Z, axis=1, keepdims=True)
+        return M + np.log(np.sum(np.exp(Z - M), axis=1, keepdims=True))
+
+    def _softmax(self, Z: np.ndarray) -> np.ndarray:
+        return np.exp(Z - self._logsumexp(Z))
+
+    def _compute_loss(self, y_onehot: np.ndarray, Z: np.ndarray) -> float:
+        lse = self._logsumexp(Z)
+        true_scores = np.sum(y_onehot * Z, axis=1, keepdims=True)
+        return np.mean(lse - true_scores)
 
     def fit(self, X: np.ndarray, y: np.ndarray):
         self.classes_ = np.unique(y)
         K = len(self.classes_)
-        
-        X_processed = self._add_intercept(X)
-        N, d = X_processed.shape
+        X = self._add_intercept(X)
+        N, d = X.shape
         self.W = np.zeros((d, K))
-        
-        # One-hot encoding y
         y_onehot = np.eye(K)[y]
-        
         start_time = time.time()
-        self.loss_history = []
-        self.time_history = []
 
         for i in range(self.max_iter):
-            # Forward pass
-            scores = X_processed @ self.W
-            probs = self._softmax(scores)
-            
-            # Compute categorical cross-entropy loss
-            eps = 1e-15
-            current_loss = -np.mean(np.sum(y_onehot * np.log(np.clip(probs, eps, 1.)), axis=1))
-            self.loss_history.append(current_loss)
+            Z = X @ self.W
+            loss = self._compute_loss(y_onehot, Z)
+            self.loss_history.append(loss)
             self.time_history.append(time.time() - start_time)
-
-            if i > 0 and abs(self.loss_history[-2] - current_loss) < self.tol:
+            if i > 0 and abs(self.loss_history[-2] - loss) < self.tol:
                 if self.verbose:
-                    print(f"[SOFTMAX] Converged at epoch {i}")
+                    print(f"[SOFTMAX] Converged at iteration {i}")
                 break
-                
-            # Compute gradient and update
-            gradient = (X_processed.T @ (probs - y_onehot)) / N
+            probs = self._softmax(Z)
+            gradient = (X.T @ (probs - y_onehot)) / N
             self.W -= self.lr * gradient
-
         return self
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
-        X_processed = self._add_intercept(X)
-        return self._softmax(X_processed @ self.W)
+        return self._softmax(self._add_intercept(X) @ self.W)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         probs = self.predict_proba(X)
         return self.classes_[np.argmax(probs, axis=1)]
 
-
+# ONE-VS-REST (OvR) CLASSIFIER
 class OneVsRestClassifier:
-    """Meta-estimator to transform a binary classifier into a multiclass one using OvR strategy."""
-    def __init__(self, estimator_cls, **kwargs):
+    """
+    One-vs-Rest (OvR) strategy for multiclass classification.
+    This meta-estimator converts any binary classifier into a multiclass classifier
+    by training one classifier per class.
+    Each classifier learns: "class c vs all other classes".
+    """
+
+    def __init__(self, estimator_cls: Type, **kwargs):
         self.estimator_cls = estimator_cls
         self.kwargs = kwargs
-        self.estimators_ = []
-        self.classes_ = None
+        self.estimators_: List = []
+        self.classes_: Optional[np.ndarray] = None
 
     def fit(self, X: np.ndarray, y: np.ndarray):
+        """
+        Train one binary classifier per class.
+        """
         self.classes_ = np.unique(y)
         self.estimators_ = []
-        
         for c in self.classes_:
+            # Convert to binary problem: class c = 1, others = 0
             y_binary = (y == c).astype(int)
             estimator = self.estimator_cls(**self.kwargs)
             estimator.fit(X, y_binary)
             self.estimators_.append(estimator)
         return self
-
+    
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
-        """Returns normalized probabilities for each class."""
-        # Get probability of positive class (1) for each estimator
-        probas = np.array([est.predict_proba(X) for est in self.estimators_]).T
-        # Normalize so they sum to 1
-        return probas / np.sum(probas, axis=1, keepdims=True)
+        """
+        Predict class probabilities.
+        """
+        # Collect probability of positive class from each estimator
+        probas = np.column_stack([
+            est.predict_proba(X) for est in self.estimators_
+        ])
+
+        # Normalize probabilities to ensure they sum to 1
+        probas_sum = np.sum(probas, axis=1, keepdims=True)
+        probas_sum = np.where(probas_sum == 0, 1, probas_sum)  # avoid division by zero
+
+        return probas / probas_sum
 
     def predict(self, X: np.ndarray) -> np.ndarray:
-        return self.classes_[np.argmax(self.predict_proba(X), axis=1)]
+        """
+        Predict class labels.
+        """
+        probas = self.predict_proba(X)
+        return self.classes_[np.argmax(probas, axis=1)]
 
 
+# ONE-VS-ONE (OvO) CLASSIFIER
 class OneVsOneClassifier:
-    """Meta-estimator to transform a binary classifier into a multiclass one using OvO strategy."""
-    def __init__(self, estimator_cls, **kwargs):
+    """
+    One-vs-One (OvO) strategy for multiclass classification.
+    This meta-estimator trains one classifier per pair of classes.
+    Final prediction is based on majority voting.
+    """
+
+    def __init__(self, estimator_cls: Type, **kwargs):
         self.estimator_cls = estimator_cls
         self.kwargs = kwargs
-        self.estimators_ = []
-        self.class_pairs_ = []
-        self.classes_ = None
+        self.estimators_: List = []
+        self.class_pairs_: List[Tuple[int, int]] = []
+        self.classes_: Optional[np.ndarray] = None
 
     def fit(self, X: np.ndarray, y: np.ndarray):
+        """
+        Train one classifier for each pair of classes.
+        """
         self.classes_ = np.unique(y)
         self.estimators_ = []
         self.class_pairs_ = []
-        
         n_classes = len(self.classes_)
+
         for i in range(n_classes):
             for j in range(i + 1, n_classes):
                 c1, c2 = self.classes_[i], self.classes_[j]
-                
-                # Filter data for the two classes
+                # Filter dataset for the current pair
                 mask = (y == c1) | (y == c2)
-                X_pair, y_pair = X[mask], y[mask]
-                
-                # Binarize labels: c1 -> 1, c2 -> 0
+                X_pair = X[mask]
+                y_pair = y[mask]
+                # Binary labels: c1 -> 1, c2 -> 0
                 y_binary = (y_pair == c1).astype(int)
-                
                 estimator = self.estimator_cls(**self.kwargs)
                 estimator.fit(X_pair, y_binary)
-                
                 self.estimators_.append(estimator)
                 self.class_pairs_.append((c1, c2))
         return self
 
     def predict(self, X: np.ndarray) -> np.ndarray:
-        N = X.shape[0]
-        votes = np.zeros((N, len(self.classes_)))
-        
-        class_to_idx = {c: idx for idx, c in enumerate(self.classes_)}
-        
-        for est, (c1, c2) in zip(self.estimators_, self.class_pairs_):
-            pred_is_c1 = est.predict(X) # 1 if c1, 0 if c2
-            
-            # Add votes
-            votes[np.arange(N), class_to_idx[c1]] += pred_is_c1
-            votes[np.arange(N), class_to_idx[c2]] += (1 - pred_is_c1)
-            
-        return self.classes_[np.argmax(votes, axis=1)]
+        """
+        Predict class labels using majority voting.
+        """
+        n_samples = X.shape[0]
+        n_classes = len(self.classes_)
+        votes = np.zeros((n_samples, n_classes))
+        class_to_index = {c: idx for idx, c in enumerate(self.classes_)}
+        for estimator, (c1, c2) in zip(self.estimators_, self.class_pairs_):
+            predictions = estimator.predict(X)  # 1 => c1, 0 => c2
+            idx_c1 = class_to_index[c1]
+            idx_c2 = class_to_index[c2]
+            # Accumulate votes
+            votes[np.arange(n_samples), idx_c1] += predictions
+            votes[np.arange(n_samples), idx_c2] += (1 - predictions)
+        return self.classes_[np.argmax(votes, axis=1)]    
+    
