@@ -2,6 +2,9 @@ import numpy as np
 import time
 from typing import List, Tuple, Optional, Type
 
+import pandas as pd
+import matplotlib.pyplot as plt
+
 class Perceptron:
     """
     Original Perceptron algorithm implemented from scratch.
@@ -444,3 +447,356 @@ class OneVsOneClassifier:
             votes[np.arange(n_samples), idx_c2] += (1 - predictions)
         return self.classes_[np.argmax(votes, axis=1)]    
     
+
+
+
+# =============================================================================
+# DISCRIMINANT ANALYSIS MODULE
+# Clean, production-ready implementation of LDA and QDA
+# =============================================================================
+
+from typing import Optional, List
+import numpy as np
+import pandas as pd
+
+
+# =============================================================================
+# BASE CLASS – SHARED UTILITIES (DRY PRINCIPLE)
+# =============================================================================
+class BaseDiscriminantAnalysis:
+    """
+    Base class providing shared utilities for discriminant analysis models.
+    """
+
+    def fisher_ratio_per_feature(self, X: np.ndarray, y: np.ndarray) -> pd.DataFrame:
+        """
+        Compute Fisher ratio for all features using vectorization.
+
+        This implementation reduces computational complexity from O(D * N)
+        to approximately O(N) by leveraging NumPy matrix operations.
+
+        Parameters
+        ----------
+        X : np.ndarray of shape (N, D)
+            Feature matrix.
+        y : np.ndarray of shape (N,)
+            Class labels.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame containing:
+            - feature index
+            - fisher_ratio
+            - rank (descending importance)
+        """
+        n_features = X.shape[1]
+        features = np.arange(n_features)
+
+        overall_mean = np.mean(X, axis=0)
+
+        between_var = np.zeros(n_features)
+        within_var = np.zeros(n_features)
+
+        classes = np.unique(y)
+
+        for cls in classes:
+            Xk = X[y == cls]
+            Nk = Xk.shape[0]
+            mean_k = np.mean(Xk, axis=0)
+
+            # Between-class variance
+            between_var += Nk * (mean_k - overall_mean) ** 2
+
+            # Within-class variance
+            within_var += np.sum((Xk - mean_k) ** 2, axis=0)
+
+        # Safe division to avoid division-by-zero
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ratios = np.where(within_var == 0, np.inf, between_var / within_var)
+
+        df = pd.DataFrame({
+            "feature": features,
+            "fisher_ratio": ratios
+        })
+
+        df["rank"] = df["fisher_ratio"].rank(ascending=False).astype(int)
+
+        return df.sort_values("fisher_ratio", ascending=False).reset_index(drop=True)
+
+
+# =============================================================================
+# LINEAR DISCRIMINANT ANALYSIS (LDA)
+# =============================================================================
+class LinearDiscriminantAnalysis(BaseDiscriminantAnalysis):
+    """
+    Linear Discriminant Analysis (LDA).
+
+    Assumes a shared covariance matrix across all classes.
+    """
+
+    def __init__(self, reg: float = 1e-6):
+        """
+        Parameters
+        ----------
+        reg : float, default=1e-6
+            Regularization term added to covariance matrix diagonal.
+        """
+        self.reg = reg
+
+        self.classes_: Optional[np.ndarray] = None
+        self.priors_: Optional[np.ndarray] = None
+        self.means_: Optional[np.ndarray] = None
+        self.cov_: Optional[np.ndarray] = None
+        self.scalings_: Optional[np.ndarray] = None  # Projection directions
+
+    def fit(self, X: np.ndarray, y: np.ndarray):
+        """
+        Fit the LDA model.
+
+        Parameters
+        ----------
+        X : np.ndarray of shape (N, D)
+        y : np.ndarray of shape (N,)
+        """
+        self.classes_ = np.unique(y)
+        K = len(self.classes_)
+        N, D = X.shape
+
+        self.means_ = np.zeros((K, D))
+        self.priors_ = np.zeros(K)
+
+        # ---------------------------------------------------------------------
+        # Compute pooled covariance matrix
+        # ---------------------------------------------------------------------
+        scatter_within = np.zeros((D, D))
+
+        for i, cls in enumerate(self.classes_):
+            Xk = X[y == cls]
+            Nk = Xk.shape[0]
+
+            self.means_[i] = np.mean(Xk, axis=0)
+            self.priors_[i] = Nk / N
+
+            # Convert covariance to scatter matrix
+            scatter_within += (Nk - 1) * np.cov(Xk, rowvar=False)
+
+        # Unbiased estimator
+        self.cov_ = scatter_within / (N - K) + self.reg * np.eye(D)
+
+        # ---------------------------------------------------------------------
+        # Fisher projection: solve generalized eigenvalue problem
+        # ---------------------------------------------------------------------
+        S_W = scatter_within
+        S_B = np.zeros((D, D))
+        global_mean = np.mean(X, axis=0)
+
+        for i in range(K):
+            diff = (self.means_[i] - global_mean).reshape(-1, 1)
+            S_B += (N * self.priors_[i]) * (diff @ diff.T)
+
+        # Solve S_W^{-1} S_B
+        inv_SW = np.linalg.pinv(S_W)
+        M = inv_SW @ S_B
+
+        eigvals, eigvecs = np.linalg.eig(M)
+
+        # Sort eigenvectors by descending eigenvalues
+        idx = np.argsort(eigvals.real)[::-1]
+        self.scalings_ = eigvecs[:, idx].real
+
+        return self
+
+    def _decision_function(self, X: np.ndarray) -> np.ndarray:
+        """
+        Compute linear discriminant scores.
+        """
+        inv_cov = np.linalg.pinv(self.cov_)
+        n_samples = X.shape[0]
+        n_classes = len(self.classes_)
+
+        scores = np.zeros((n_samples, n_classes))
+
+        for k in range(n_classes):
+            mu = self.means_[k]
+
+            linear_term = X @ inv_cov @ mu
+            constant_term = -0.5 * (mu.T @ inv_cov @ mu) + np.log(self.priors_[k])
+
+            scores[:, k] = linear_term + constant_term
+
+        return scores
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        """
+        Predict class probabilities using softmax.
+        """
+        scores = self._decision_function(X)
+
+        # Numerical stability (log-sum-exp trick)
+        scores -= np.max(scores, axis=1, keepdims=True)
+
+        exp_scores = np.exp(scores)
+        return exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """
+        Predict class labels.
+        """
+        return self.classes_[np.argmax(self._decision_function(X), axis=1)]
+
+    def transform(self, X: np.ndarray, n_components: int = 2) -> np.ndarray:
+        """
+        Project data into LDA subspace (max K-1 dimensions).
+        """
+        max_components = min(self.scalings_.shape[1], n_components)
+        return X @ self.scalings_[:, :max_components]
+
+
+# =============================================================================
+# QUADRATIC DISCRIMINANT ANALYSIS (QDA)
+# =============================================================================
+class QuadraticDiscriminantAnalysis(BaseDiscriminantAnalysis):
+    """
+    Quadratic Discriminant Analysis (QDA).
+
+    Each class has its own covariance matrix.
+    """
+
+    def __init__(self, reg: float = 1e-6):
+        self.reg = reg
+
+        self.classes_: Optional[np.ndarray] = None
+        self.priors_: Optional[np.ndarray] = None
+        self.means_: Optional[np.ndarray] = None
+        self.covariances_: Optional[List[np.ndarray]] = None
+
+    def fit(self, X: np.ndarray, y: np.ndarray):
+        """
+        Fit the QDA model.
+        """
+        self.classes_ = np.unique(y)
+        K = len(self.classes_)
+        N, D = X.shape
+
+        self.means_ = np.zeros((K, D))
+        self.priors_ = np.zeros(K)
+        self.covariances_ = []
+
+        for i, cls in enumerate(self.classes_):
+            Xk = X[y == cls]
+
+            self.means_[i] = np.mean(Xk, axis=0)
+            self.priors_[i] = Xk.shape[0] / N
+
+            # Class-specific covariance
+            if Xk.shape[0] > 1:
+                cov_k = np.cov(Xk, rowvar=False)
+            else:
+                cov_k = np.zeros((D, D))
+
+            cov_k += self.reg * np.eye(D)
+            self.covariances_.append(cov_k)
+
+        return self
+
+    def _decision_function(self, X: np.ndarray) -> np.ndarray:
+        """
+        Compute quadratic discriminant scores.
+        """
+        n_samples = X.shape[0]
+        n_classes = len(self.classes_)
+
+        scores = np.zeros((n_samples, n_classes))
+
+        for k in range(n_classes):
+            mu = self.means_[k]
+            cov = self.covariances_[k]
+
+            inv_cov = np.linalg.pinv(cov)
+
+            # Stable log-determinant
+            sign, logdet = np.linalg.slogdet(cov)
+            logdet = sign * logdet
+
+            diff = X - mu
+
+            # Mahalanobis distance (vectorized)
+            quadratic_term = np.sum((diff @ inv_cov) * diff, axis=1)
+
+            scores[:, k] = -0.5 * (logdet + quadratic_term) + np.log(self.priors_[k])
+
+        return scores
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        """
+        Predict class probabilities using softmax.
+        """
+        scores = self._decision_function(X)
+
+        scores -= np.max(scores, axis=1, keepdims=True)
+
+        exp_scores = np.exp(scores)
+        return exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """
+        Predict class labels.
+        """
+        return self.classes_[np.argmax(self._decision_function(X), axis=1)]
+
+# ============================================================================
+# HÀM TRỰC QUAN HÓA: VẼ BIÊN QUYẾT ĐỊNH 2D CHO LDA
+# ============================================================================
+def plot_lda_decision_boundary(model: LinearDiscriminantAnalysis, X: np.ndarray, y: np.ndarray, title: str = "LDA 2D Projection & Decision Boundary"):
+    """
+    Chiếu dữ liệu xuống 2 chiều đầu tiên (Fisher Space) và vẽ đường biên quyết định.
+    """
+    import matplotlib.colors as mcolors
+    
+    # 1. Chiếu dữ liệu xuống 2D
+    X_proj = model.transform(X, n_components=2)
+    
+    # Huấn luyện mô hình LDA phụ trên không gian 2D để tìm đường biên chính xác
+    lda_2d = LinearDiscriminantAnalysis(reg=model.reg)
+    lda_2d.fit(X_proj, y)
+    
+    # 2. Xây dựng lưới điểm (Meshgrid)
+    x_min, x_max = X_proj[:, 0].min() - 1, X_proj[:, 0].max() + 1
+    y_min, y_max = X_proj[:, 1].min() - 1, X_proj[:, 1].max() + 1
+    xx, yy = np.meshgrid(np.linspace(x_min, x_max, 300),
+                         np.linspace(y_min, y_max, 300))
+    grid = np.c_[xx.ravel(), yy.ravel()]
+    
+    # 3. Dự đoán trên lưới
+    grid_pred = lda_2d.predict(grid).reshape(xx.shape)
+    
+    # 4. Trực quan hóa
+    plt.figure(figsize=(10, 7), dpi=120)
+    
+    # Định nghĩa bảng màu đẹp mắt
+    colors = ['#FFAAAA', '#AAFFAA', '#AAAAFF', '#FFFFAA'][:len(model.classes_)]
+    cmap_bg = mcolors.ListedColormap(colors)
+    scatter_colors = ['red', 'green', 'blue', 'orange'][:len(model.classes_)]
+    cmap_scatter = mcolors.ListedColormap(scatter_colors)
+    
+    # Vẽ Contour (Vùng quyết định)
+    plt.contourf(xx, yy, grid_pred, alpha=0.4, cmap=cmap_bg)
+    plt.contour(xx, yy, grid_pred, colors='k', linewidths=0.5, alpha=0.5)
+    
+    # Vẽ Scatter (Các điểm dữ liệu thực)
+    scatter = plt.scatter(X_proj[:, 0], X_proj[:, 1], c=y, 
+                          edgecolors='k', cmap=cmap_scatter, s=35, alpha=0.8)
+    
+    plt.xlabel("Linear Discriminant 1 (LD1)", fontweight='bold')
+    plt.ylabel("Linear Discriminant 2 (LD2)", fontweight='bold')
+    plt.title(title, fontsize=14, fontweight='bold', pad=15)
+    
+    # Thêm Legend
+    handles, _ = scatter.legend_elements()
+    plt.legend(handles, [f"Class {c}" for c in model.classes_], title="Classes", loc="best")
+    
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.tight_layout()
+    plt.show()
+
