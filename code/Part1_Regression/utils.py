@@ -624,3 +624,197 @@ def fit_wls(Phi: np.ndarray, y: np.ndarray, weights: np.ndarray,
     w = fit_ols(Phi_weighted, y_weighted, bias_is_first=bias_is_first)
     
     return w
+
+
+# ============================================================
+# ROBUST REGRESSION — IRLS with Huber Loss
+# ============================================================
+
+def huber_loss(residuals, delta):
+    """Tính Huber Loss cho từng phần tử."""
+    abs_r = np.abs(residuals)
+    loss = np.where(
+        abs_r <= delta,
+        0.5 * residuals**2,
+        delta * abs_r - 0.5 * delta**2
+    )
+    return np.mean(loss)
+
+
+def huber_weights(residuals, delta):
+    """Tính trọng số IRLS từ Huber Loss."""
+    abs_r = np.abs(residuals)
+    weights = np.where(
+        abs_r <= delta,
+        1.0,
+        delta / (abs_r + 1e-8)
+    )
+    return weights
+
+
+def fit_irls_huber(Phi, y, delta=1.345, max_iter=50, tol=1e-6, lam=0.0):
+    """
+    Hồi quy bền vững bằng IRLS với Huber Loss.
+    
+    Parameters:
+        Phi      : Ma trận đặc trưng (N x D)
+        y        : Vector mục tiêu (N,)
+        delta    : Ngưỡng Huber — điểm chuyển từ L2 sang L1
+        max_iter : Số vòng lặp tối đa
+        tol      : Ngưỡng hội tụ (thay đổi trọng số w giữa 2 vòng lặp)
+        lam      : Hệ số regularization (Ridge) — mặc định 0 (không regularize)
+    
+    Returns:
+        w            : Trọng số tối ưu
+        loss_history : Lịch sử Huber Loss qua từng vòng lặp
+    """
+    N, D = Phi.shape
+    
+    # Bước 0: Khởi tạo bằng OLS (hoặc Ridge nếu lam > 0)
+    if lam > 0:
+        w = fit_ridge(Phi, y, lam, bias_is_first=True)
+    else:
+        w = fit_ols(Phi, y, bias_is_first=True)
+    
+    loss_history = []
+    
+    for iteration in range(max_iter):
+        # 1. Tính phần dư (residuals)
+        y_pred = Phi @ w
+        residuals = y - y_pred
+        
+        # 2. Tính Huber Loss hiện tại
+        current_loss = huber_loss(residuals, delta)
+        loss_history.append(current_loss)
+        
+        # 3. Tính trọng số IRLS từ Huber
+        sample_weights = huber_weights(residuals, delta)
+        
+        # 4. Giải bài toán WLS (Weighted Least Squares)
+        W_diag = np.diag(np.sqrt(sample_weights))
+        Phi_w = W_diag @ Phi
+        y_w = W_diag @ y
+        
+        # Giải bằng Ridge (hoặc OLS nếu lam=0)
+        A = Phi_w.T @ Phi_w
+        reg = lam * np.eye(D)
+        reg[0, 0] = 0.0  # Không phạt bias
+        w_new = np.linalg.solve(A + reg, Phi_w.T @ y_w)
+        
+        # 5. Kiểm tra hội tụ
+        if np.max(np.abs(w_new - w)) < tol:
+            w = w_new
+            y_pred = Phi @ w
+            residuals = y - y_pred
+            loss_history.append(huber_loss(residuals, delta))
+            print(f"  IRLS hội tụ sau {iteration + 1} vòng lặp.")
+            break
+        
+        w = w_new
+    else:
+        print(f"  IRLS chưa hội tụ sau {max_iter} vòng lặp.")
+    
+    return w, loss_history
+
+
+# ============================================================
+# OUTLIER INJECTION — For Sensitivity Analysis
+# ============================================================
+
+def inject_outliers(y, fraction=0.05, multiplier=10, seed=42):
+    """
+    Chèn outliers nhân tạo vào vector y.
+    
+    Parameters:
+        y          : Vector mục tiêu gốc
+        fraction   : Tỉ lệ mẫu bị biến thành outlier (0.05 = 5%)
+        multiplier : Hệ số nhân để tạo outlier (y_outlier = y_mean + multiplier * y_std)
+        seed       : Random seed
+    
+    Returns:
+        y_corrupted    : Vector y đã bị chèn outlier
+        outlier_mask   : Boolean array đánh dấu vị trí outlier
+    """
+    rng = np.random.default_rng(seed)
+    y_corrupted = y.copy().astype(float)
+    n = len(y)
+    n_outliers = int(n * fraction)
+    
+    outlier_indices = rng.choice(n, size=n_outliers, replace=False)
+    outlier_mask = np.zeros(n, dtype=bool)
+    outlier_mask[outlier_indices] = True
+    
+    y_mean = np.mean(y)
+    y_std = np.std(y)
+    
+    outlier_values = y_mean + multiplier * y_std * rng.choice([-1, 1], size=n_outliers)
+    y_corrupted[outlier_indices] = outlier_values
+    
+    return y_corrupted, outlier_mask
+
+
+# ============================================================
+# BIAS-VARIANCE DECOMPOSITION — via Bootstrapping
+# ============================================================
+
+def bias_variance_decomposition(Phi_train, y_train, Phi_test, y_test,
+                                 lambdas, n_bootstrap=200, seed=42):
+    """
+    Phân tích Bias-Variance Tradeoff bằng Bootstrapping.
+    
+    Parameters:
+        Phi_train   : Ma trận đặc trưng tập train (N_train x D)
+        y_train     : Vector mục tiêu tập train (N_train,)
+        Phi_test    : Ma trận đặc trưng tập test (N_test x D) 
+        y_test      : Vector mục tiêu tập test (N_test,)
+        lambdas     : Danh sách các giá trị lambda
+        n_bootstrap : Số lần lặp bootstrap
+        seed        : Random seed
+    
+    Returns:
+        bias_squared_list : Bias² cho mỗi lambda
+        variance_list     : Variance cho mỗi lambda
+        mse_list          : MSE tổng cho mỗi lambda
+    """
+    import time
+    
+    rng = np.random.default_rng(seed)
+    N_train = Phi_train.shape[0]
+    N_test = Phi_test.shape[0]
+    n_lambdas = len(lambdas)
+    
+    bias_squared_list = []
+    variance_list = []
+    mse_list = []
+    
+    total_start = time.time()
+    
+    for lam_idx, lam in enumerate(lambdas):
+        all_predictions = np.zeros((n_bootstrap, N_test))
+        
+        for b in range(n_bootstrap):
+            bootstrap_indices = rng.choice(N_train, size=N_train, replace=True)
+            Phi_b = Phi_train[bootstrap_indices]
+            y_b = y_train[bootstrap_indices]
+            
+            w_b = fit_ridge(Phi_b, y_b, lam=lam, bias_is_first=True)
+            all_predictions[b, :] = Phi_test @ w_b
+        
+        mean_predictions = np.mean(all_predictions, axis=0)
+        
+        bias_sq = np.mean((mean_predictions - y_test) ** 2)
+        variance = np.mean(np.var(all_predictions, axis=0))
+        mse_total = np.mean((all_predictions - y_test[np.newaxis, :]) ** 2)
+        
+        bias_squared_list.append(bias_sq)
+        variance_list.append(variance)
+        mse_list.append(mse_total)
+        
+        print(f"  λ = {lam:>10.4f} (log₁₀={np.log10(lam):>6.2f}): "
+              f"Bias² = {bias_sq:>10.4f}, Var = {variance:>10.4f}, MSE = {mse_total:>10.4f}",
+              end='\r')
+    
+    elapsed = time.time() - total_start
+    print(f"\n\nBootstrapping hoàn tất! Thời gian: {elapsed:.1f}s ({n_bootstrap} lần × {n_lambdas} λ)")
+    
+    return bias_squared_list, variance_list, mse_list
