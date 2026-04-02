@@ -872,3 +872,214 @@ def plot_lda_qda_decision_analysis(
         ax.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()
     plt.show()
+
+# =====================================================================
+# ADVANCED & BONUS MODELS: KERNEL LOGISTIC REGRESSION, GNB, AND LDA
+# =====================================================================
+
+def rbf_kernel(X1, X2, gamma=1.0):
+    """
+    Computes the Radial Basis Function (RBF) kernel matrix between two datasets.
+    K(x, x') = exp(-gamma * ||x - x'||^2)
+    """
+    # Calculate squared Euclidean distance using vectorized operations
+    sq_dists = np.sum(X1**2, axis=1).reshape(-1, 1) + np.sum(X2**2, axis=1) - 2 * np.dot(X1, X2.T)
+    return np.exp(-gamma * sq_dists)
+
+class KernelLogisticRegression:
+    """
+    Kernel Logistic Regression using the Dual Formulation.
+    Maps data into a higher-dimensional space using the Kernel Trick 
+    to solve non-linearly separable problems (e.g., XOR patterns).
+    """
+    def __init__(self, gamma=1.0, lambda_reg=0.01, learning_rate=0.1, max_iter=1000, tol=1e-5):
+        self.gamma = gamma
+        self.lambda_reg = lambda_reg
+        self.learning_rate = learning_rate
+        self.max_iter = max_iter
+        self.tol = tol
+        self.alpha = None
+        self.X_train = None
+
+    def _sigmoid(self, z):
+        # Clip z to prevent overflow in exp
+        return 1 / (1 + np.exp(-np.clip(z, -250, 250)))
+
+    def fit(self, X, y):
+        self.X_train = X
+        n_samples = X.shape[0]
+        
+        # Precompute the Kernel matrix for the training data
+        K = rbf_kernel(X, X, self.gamma)
+        
+        # Initialize the dual coefficients (alpha)
+        self.alpha = np.zeros(n_samples)
+
+        for epoch in range(self.max_iter):
+            # Linear output in the feature space: z = K * alpha
+            z = K @ self.alpha
+            y_pred = self._sigmoid(z)
+
+            # Gradient of the log-loss with respect to alpha
+            # (Simplified by dropping K since we optimize alpha directly)
+            grad_alpha = (y_pred - y) + self.lambda_reg * self.alpha
+
+            # Update alpha using Gradient Descent
+            self.alpha -= self.learning_rate * grad_alpha
+
+            # Early stopping condition
+            if np.linalg.norm(grad_alpha) < self.tol:
+                break
+
+    def predict_proba(self, X):
+        # Compute Kernel matrix between test data and training data
+        K_test = rbf_kernel(X, self.X_train, self.gamma)
+        z = K_test @ self.alpha
+        return self._sigmoid(z)
+
+    def predict(self, X, threshold=0.5):
+        return (self.predict_proba(X) >= threshold).astype(int)
+
+
+class GaussianNaiveBayes:
+    """
+    Gaussian Naive Bayes classifier.
+    Assumes that continuous features follow a Gaussian distribution 
+    and are mutually independent (diagonal covariance matrix).
+    """
+    def __init__(self):
+        self.classes = None
+        self.priors = {}
+        self.means = {}
+        self.vars = {}
+
+    def fit(self, X, y):
+        self.classes = np.unique(y)
+        n_samples = X.shape[0]
+
+        for c in self.classes:
+            X_c = X[y == c]
+            self.priors[c] = X_c.shape[0] / n_samples
+            self.means[c] = np.mean(X_c, axis=0)
+            # Add a small epsilon to variance to prevent division by zero
+            self.vars[c] = np.var(X_c, axis=0) + 1e-9
+
+    def _calculate_log_likelihood(self, class_idx, x):
+        mean = self.means[class_idx]
+        var = self.vars[class_idx]
+        # Use log-likelihood to prevent underflow issues with tiny probabilities
+        log_numerator = - ((x - mean)**2) / (2 * var)
+        log_denominator = 0.5 * np.log(2 * np.pi * var)
+        return log_numerator - log_denominator
+
+    def predict(self, X):
+        y_pred = []
+        for x in X:
+            posteriors = []
+            for c in self.classes:
+                prior = np.log(self.priors[c])
+                # Due to the independence assumption, the joint log-likelihood 
+                # is the sum of individual feature log-likelihoods
+                likelihood = np.sum(self._calculate_log_likelihood(c, x))
+                posterior = prior + likelihood
+                posteriors.append(posterior)
+            y_pred.append(self.classes[np.argmax(posteriors)])
+        return np.array(y_pred)
+
+
+class LinearDiscriminantAnalysis:
+    """
+    Linear Discriminant Analysis (LDA) classifier.
+    A generative model that assumes all classes share the same covariance matrix.
+    """
+    def __init__(self):
+        self.classes = None
+        self.priors = {}
+        self.means = {}
+        self.covariance = None
+        self.inv_covariance = None
+
+    def fit(self, X, y):
+        self.classes = np.unique(y)
+        n_samples, n_features = X.shape
+        
+        self.covariance = np.zeros((n_features, n_features))
+        
+        for c in self.classes:
+            X_c = X[y == c]
+            self.priors[c] = X_c.shape[0] / n_samples
+            self.means[c] = np.mean(X_c, axis=0)
+            
+            # Compute within-class scatter matrix
+            centered_X_c = X_c - self.means[c]
+            self.covariance += centered_X_c.T @ centered_X_c
+            
+        # Share the covariance matrix across all classes
+        self.covariance /= n_samples
+        # Add a small epsilon to the diagonal to ensure invertibility
+        self.covariance += np.eye(n_features) * 1e-9
+        self.inv_covariance = np.linalg.inv(self.covariance)
+
+    def predict(self, X):
+        y_pred = []
+        for x in X:
+            discriminants = []
+            for c in self.classes:
+                mean = self.means[c]
+                prior = self.priors[c]
+                # Linear discriminant function (log-posterior odds)
+                d_k = x.T @ self.inv_covariance @ mean - 0.5 * mean.T @ self.inv_covariance @ mean + np.log(prior)
+                discriminants.append(d_k)
+            y_pred.append(self.classes[np.argmax(discriminants)])
+        return np.array(y_pred)
+    
+
+def plot_decision_boundary_comparison(X, y, model_linear, model_kernel, title_lin, title_ker):
+    """
+    Visualizes and compares the decision boundaries between the linear model and the kernel model side-by-side.
+    """
+    h = 0.02
+    x_min, x_max = X[:, 0].min() - 0.5, X[:, 0].max() + 0.5
+    y_min, y_max = X[:, 1].min() - 0.5, X[:, 1].max() + 0.5
+    xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
+    grid_points = np.c_[xx.ravel(), yy.ravel()]
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+    # --- Plot 1: Standard Linear Logistic Regression ---
+    # Call predict_proba directly; the custom method handles adding the intercept internally.
+    # It returns a 1D array of probabilities for Class 1.
+    # FIX: Add bias column to match the training data shape (X_xor_bias)
+    grid_points_bias = np.c_[np.ones((grid_points.shape[0], 1)), grid_points]
+    Z_lin = model_linear.predict_proba(grid_points_bias).reshape(xx.shape)
+    
+    contour1 = axes[0].contourf(xx, yy, Z_lin, levels=20, cmap='RdBu', alpha=0.8)
+    axes[0].contour(xx, yy, Z_lin, levels=[0.5], colors='black', linewidths=2, linestyles='dashed')
+    
+    # Scatter data points
+    axes[0].scatter(X[y == 0][:, 0], X[y == 0][:, 1], color='crimson', edgecolors='k', label='Class 0')
+    axes[0].scatter(X[y == 1][:, 0], X[y == 1][:, 1], color='royalblue', edgecolors='k', label='Class 1')
+    axes[0].set_title(title_lin, fontsize=14, fontweight='bold', pad=15)
+    axes[0].set_xlabel('Feature 1 ($X_1$)')
+    axes[0].set_ylabel('Feature 2 ($X_2$)')
+    axes[0].legend(loc='best')
+
+    # --- Plot 2: Kernel Logistic Regression (RBF) ---
+    Z_ker = model_kernel.predict_proba(grid_points).reshape(xx.shape)
+    
+    contour2 = axes[1].contourf(xx, yy, Z_ker, levels=20, cmap='RdBu', alpha=0.8)
+    axes[1].contour(xx, yy, Z_ker, levels=[0.5], colors='black', linewidths=2, linestyles='dashed')
+    
+    # Scatter data points
+    axes[1].scatter(X[y == 0][:, 0], X[y == 0][:, 1], color='crimson', edgecolors='k', label='Class 0')
+    axes[1].scatter(X[y == 1][:, 0], X[y == 1][:, 1], color='royalblue', edgecolors='k', label='Class 1')
+    axes[1].set_title(title_ker, fontsize=14, fontweight='bold', pad=15)
+    axes[1].set_xlabel('Feature 1 ($X_1$)')
+    axes[1].legend(loc='best')
+
+    # Add a shared colorbar for both subplots
+    cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+    fig.colorbar(contour2, cax=cbar_ax, label='Predicted Probability (Class 1)')
+
+    plt.subplots_adjust(right=0.9)
+    plt.show()
