@@ -987,51 +987,51 @@ class GaussianNaiveBayes:
         return np.array(y_pred)
 
 
-class LinearDiscriminantAnalysis:
-    """
-    Linear Discriminant Analysis (LDA) classifier.
-    A generative model that assumes all classes share the same covariance matrix.
-    """
-    def __init__(self):
-        self.classes = None
-        self.priors = {}
-        self.means = {}
-        self.covariance = None
-        self.inv_covariance = None
+# class LinearDiscriminantAnalysis:
+#     """
+#     Linear Discriminant Analysis (LDA) classifier.
+#     A generative model that assumes all classes share the same covariance matrix.
+#     """
+#     def __init__(self):
+#         self.classes = None
+#         self.priors = {}
+#         self.means = {}
+#         self.covariance = None
+#         self.inv_covariance = None
 
-    def fit(self, X, y):
-        self.classes = np.unique(y)
-        n_samples, n_features = X.shape
+#     def fit(self, X, y):
+#         self.classes = np.unique(y)
+#         n_samples, n_features = X.shape
         
-        self.covariance = np.zeros((n_features, n_features))
+#         self.covariance = np.zeros((n_features, n_features))
         
-        for c in self.classes:
-            X_c = X[y == c]
-            self.priors[c] = X_c.shape[0] / n_samples
-            self.means[c] = np.mean(X_c, axis=0)
+#         for c in self.classes:
+#             X_c = X[y == c]
+#             self.priors[c] = X_c.shape[0] / n_samples
+#             self.means[c] = np.mean(X_c, axis=0)
             
-            # Compute within-class scatter matrix
-            centered_X_c = X_c - self.means[c]
-            self.covariance += centered_X_c.T @ centered_X_c
+#             # Compute within-class scatter matrix
+#             centered_X_c = X_c - self.means[c]
+#             self.covariance += centered_X_c.T @ centered_X_c
             
-        # Share the covariance matrix across all classes
-        self.covariance /= n_samples
-        # Add a small epsilon to the diagonal to ensure invertibility
-        self.covariance += np.eye(n_features) * 1e-9
-        self.inv_covariance = np.linalg.inv(self.covariance)
+#         # Share the covariance matrix across all classes
+#         self.covariance /= n_samples
+#         # Add a small epsilon to the diagonal to ensure invertibility
+#         self.covariance += np.eye(n_features) * 1e-9
+#         self.inv_covariance = np.linalg.inv(self.covariance)
 
-    def predict(self, X):
-        y_pred = []
-        for x in X:
-            discriminants = []
-            for c in self.classes:
-                mean = self.means[c]
-                prior = self.priors[c]
-                # Linear discriminant function (log-posterior odds)
-                d_k = x.T @ self.inv_covariance @ mean - 0.5 * mean.T @ self.inv_covariance @ mean + np.log(prior)
-                discriminants.append(d_k)
-            y_pred.append(self.classes[np.argmax(discriminants)])
-        return np.array(y_pred)
+#     def predict(self, X):
+#         y_pred = []
+#         for x in X:
+#             discriminants = []
+#             for c in self.classes:
+#                 mean = self.means[c]
+#                 prior = self.priors[c]
+#                 # Linear discriminant function (log-posterior odds)
+#                 d_k = x.T @ self.inv_covariance @ mean - 0.5 * mean.T @ self.inv_covariance @ mean + np.log(prior)
+#                 discriminants.append(d_k)
+#             y_pred.append(self.classes[np.argmax(discriminants)])
+#         return np.array(y_pred)
     
 
 def plot_decision_boundary_comparison(X, y, model_linear, model_kernel, title_lin, title_ker):
