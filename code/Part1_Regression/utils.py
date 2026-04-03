@@ -941,3 +941,56 @@ def bias_variance_decomposition(Phi_train, y_train, Phi_test, y_test,
     print(f"\n\nBootstrapping hoàn tất! Thời gian: {elapsed:.1f}s ({n_bootstrap} lần × {n_lambdas} λ)")
     
     return bias_squared_list, variance_list, mse_list
+
+# BAYESIAN LINEAR REGRESSION
+def gaussian_rbf(X: np.ndarray, centers: np.ndarray, s: float) -> np.ndarray:
+    X = np.atleast_2d(X).reshape(-1, 1)          # (N, 1)
+    centers = np.atleast_1d(centers).ravel()      # (M,)
+
+    # Broadcast difference: (N, 1) - (1, M) = (N, M)
+    diff = X - centers[np.newaxis, :]             # (N, M)
+    return np.exp(-(diff ** 2) / (2.0 * s ** 2))
+
+
+def compute_posterior(
+    Phi_train: np.ndarray,
+    t_train: np.ndarray,
+    alpha: float,
+    beta: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    t_train = np.atleast_1d(t_train).ravel()   # ensure shape (N,)
+    M = Phi_train.shape[1]
+
+    # Compute the inverse of S_N:  S_N^{-1} = alpha*I + beta * Phi^T @ Phi
+    S_N_inv = alpha * np.eye(M) + beta * (Phi_train.T @ Phi_train)
+
+    # Solve S_N^{-1} @ S_N = I  =>  S_N = solve(S_N_inv, I)
+    S_N = np.linalg.solve(S_N_inv, np.eye(M))
+
+    # Posterior mean:  m_N = beta * S_N @ Phi^T @ t
+    m_N = beta * S_N @ Phi_train.T @ t_train
+
+    return m_N, S_N
+
+
+def compute_predictive_distribution(
+    Phi_test: np.ndarray,
+    m_N: np.ndarray,
+    S_N: np.ndarray,
+    beta: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    # Predictive mean: f* = Phi_test @ m_N
+    f_star = Phi_test @ m_N                              # (N_test,)
+
+    # Epistemic variance (model uncertainty): diag(Phi_test @ S_N @ Phi_test^T)
+    # Efficient computation: row-wise dot of (Phi_test @ S_N) and Phi_test
+    epistemic_var = np.sum((Phi_test @ S_N) * Phi_test, axis=1)   # (N_test,)
+
+    # Aleatoric variance (irreducible noise): 1 / beta
+    aleatoric_var = 1.0 / beta
+
+    # Total predictive variance and standard deviation
+    sigma_N_sq = aleatoric_var + epistemic_var           # (N_test,)
+    sigma_N = np.sqrt(np.maximum(sigma_N_sq, 0.0))      # guard against tiny negatives
+
+    return f_star, sigma_N
