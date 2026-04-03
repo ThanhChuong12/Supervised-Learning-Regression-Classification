@@ -446,7 +446,7 @@ def metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
     ss_res = float(np.sum((y_true - y_pred) ** 2))
     ss_tot = float(np.sum((y_true - np.mean(y_true)) ** 2))
     r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else float('nan')
-    return {'RMSE': rmse, 'MAE': mae, 'R2': r2}
+    return {'MSE': float(mse), 'RMSE': rmse, 'MAE': mae, 'R2': r2}
 
 def mse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     y_true = y_true.astype(float)
@@ -501,8 +501,11 @@ def fit_ols(Phi: np.ndarray, y: np.ndarray, bias_is_first: bool = True) -> np.nd
     PhiT_Phi = Phi.T @ Phi
     PhiT_y = Phi.T @ y
     
-    # Solve linear system instead of computing inverse for numerical stability
-    w = np.linalg.solve(PhiT_Phi, PhiT_y)
+    # Solve linear system; fall back to least-squares if matrix is singular
+    try:
+        w = np.linalg.solve(PhiT_Phi, PhiT_y)
+    except np.linalg.LinAlgError:
+        w, _, _, _ = np.linalg.lstsq(Phi, y, rcond=None)
     
     return w
 
@@ -818,3 +821,167 @@ def bias_variance_decomposition(Phi_train, y_train, Phi_test, y_test,
     print(f"\n\nBootstrapping hoàn tất! Thời gian: {elapsed:.1f}s ({n_bootstrap} lần × {n_lambdas} λ)")
     
     return bias_squared_list, variance_list, mse_list
+
+
+# =====================================================================
+# Model Evaluation Utilities
+# =====================================================================
+
+def compute_learning_curve(Phi_train, y_train, Phi_val, y_val,
+                           fit_fn, n_points=10):
+    """
+    Compute learning curves by training on increasing subsets of training data.
+    
+    Parameters:
+        Phi_train, y_train: training data
+        Phi_val, y_val: validation data
+        fit_fn: callable(Phi, y) -> w  (a function that fits and returns weights)
+        n_points: number of data points on the curve
+    
+    Returns:
+        train_sizes, train_losses, val_losses  (all numpy arrays)
+    """
+    n, d = Phi_train.shape
+    min_size = max(d + 10, n // n_points)  # must exceed #features to avoid singular matrix
+    sizes = np.linspace(min_size, n, n_points, dtype=int)
+    train_losses = []
+    val_losses = []
+
+    for size in sizes:
+        Phi_sub = Phi_train[:size]
+        y_sub = y_train[:size]
+        w = fit_fn(Phi_sub, y_sub)
+        train_pred = Phi_sub @ w
+        val_pred = Phi_val @ w
+        train_losses.append(float(np.mean((y_sub - train_pred) ** 2)))
+        val_losses.append(float(np.mean((y_val - val_pred) ** 2)))
+    
+    return np.array(sizes), np.array(train_losses), np.array(val_losses)
+
+
+def plot_learning_curves(train_sizes, train_losses, val_losses,
+                         title='Learning Curves'):
+    """Plot train loss and validation loss vs. number of training samples."""
+    plt.figure(figsize=(10, 5))
+    plt.plot(train_sizes, train_losses, 'o-', label='Train MSE', linewidth=2)
+    plt.plot(train_sizes, val_losses, 's-', label='Validation MSE', linewidth=2)
+    plt.xlabel('Number of Training Samples', fontsize=12)
+    plt.ylabel('MSE', fontsize=12)
+    plt.title(title, fontsize=14, fontweight='bold')
+    plt.legend(fontsize=11)
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_residuals(y_true, y_pred, title='Residual Plot'):
+    """Scatter plot of predicted vs residuals to check randomness of errors."""
+    residuals = y_true - y_pred
+    plt.figure(figsize=(10, 5))
+    plt.scatter(y_pred, residuals, alpha=0.3, s=10, color='steelblue')
+    plt.axhline(y=0, color='red', linestyle='--', linewidth=1.5)
+    plt.xlabel('Predicted Values', fontsize=12)
+    plt.ylabel('Residuals (y_true - y_pred)', fontsize=12)
+    plt.title(title, fontsize=14, fontweight='bold')
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_predicted_vs_actual(y_true, y_pred, title='Predicted vs Actual'):
+    """Scatter plot of actual vs predicted with y=x reference line."""
+    plt.figure(figsize=(7, 7))
+    plt.scatter(y_true, y_pred, alpha=0.3, s=10, color='steelblue')
+    lims = [min(y_true.min(), y_pred.min()), max(y_true.max(), y_pred.max())]
+    plt.plot(lims, lims, 'r--', linewidth=1.5, label='y = x (ideal)')
+    plt.xlabel('Actual Values', fontsize=12)
+    plt.ylabel('Predicted Values', fontsize=12)
+    plt.title(title, fontsize=14, fontweight='bold')
+    plt.legend(fontsize=11)
+    plt.grid(True, alpha=0.3)
+    plt.axis('equal')
+    plt.tight_layout()
+    plt.show()
+
+
+def build_model_comparison_table(model_results: dict):
+    """
+    Print a formatted comparison table.
+    
+    Parameters:
+        model_results: dict of {model_name: {'MSE':..., 'RMSE':..., 'MAE':..., 'R2':...}}
+    """
+    header = f"{'Model':<35} {'MSE':>12} {'RMSE':>12} {'MAE':>12} {'R²':>12}"
+    sep = "=" * len(header)
+    print(sep)
+    print(header)
+    print(sep)
+    for name, m in model_results.items():
+        print(f"{name:<35} {m['MSE']:>12.4f} {m['RMSE']:>12.4f} "
+              f"{m['MAE']:>12.4f} {m['R2']:>12.4f}")
+    print(sep)
+
+
+def kfold_cross_validation_ts(Phi, y, fit_fn, k=10):
+    """
+    Time-Series K-Fold Cross-Validation (Expanding Window).
+    
+    Parameters:
+        Phi: design matrix (n_samples, n_features)
+        y: target vector
+        fit_fn: callable(Phi, y) -> w
+        k: number of folds
+    
+    Returns:
+        fold_metrics: list of dicts, each with MSE, RMSE, MAE, R2
+    """
+    folds = time_series_cv_indices(len(y), k=k)
+    fold_metrics_list = []
+    
+    for train_idx, val_idx in folds:
+        Phi_tr, y_tr = Phi[train_idx], y[train_idx]
+        Phi_va, y_va = Phi[val_idx], y[val_idx]
+        
+        w = fit_fn(Phi_tr, y_tr)
+        y_pred = Phi_va @ w
+        m = metrics(y_va, y_pred)
+        fold_metrics_list.append(m)
+    
+    return fold_metrics_list
+
+
+def statistical_test_models(scores_a, scores_b, metric_name='MSE',
+                            test_type='wilcoxon'):
+    """
+    Perform paired statistical test on per-fold scores of two models.
+    
+    Parameters:
+        scores_a: list/array of per-fold metric values for model A
+        scores_b: list/array of per-fold metric values for model B
+        metric_name: name of the metric (for display)
+        test_type: 'ttest' for paired t-test, 'wilcoxon' for Wilcoxon signed-rank
+    
+    Returns:
+        stat, p_value, is_significant (at alpha=0.05)
+    """
+    from scipy.stats import ttest_rel, wilcoxon as scipy_wilcoxon
+    
+    a = np.array(scores_a)
+    b = np.array(scores_b)
+    
+    if test_type == 'ttest':
+        stat, p_value = ttest_rel(a, b)
+        test_name = 'Paired t-test'
+    else:
+        stat, p_value = scipy_wilcoxon(a, b)
+        test_name = 'Wilcoxon signed-rank test'
+    
+    is_significant = p_value < 0.05
+    return {
+        'test': test_name,
+        'metric': metric_name,
+        'statistic': float(stat),
+        'p_value': float(p_value),
+        'significant': is_significant,
+    }
+
