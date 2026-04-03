@@ -1,4 +1,3 @@
-
 import numpy as np
 import matplotlib.pyplot as plt
 import time
@@ -64,7 +63,6 @@ def spline_features(
     transformer: dict | None = None,
     fit: bool = False,
 ) -> tuple[np.ndarray, dict]:
-    """Cubic spline basis (truncated power basis) implemented from scratch."""
     N, D = X_s.shape
     if transformer is None or fit:
         # Generate interior knots based on quantiles
@@ -297,7 +295,6 @@ def interaction_terms(X_s: np.ndarray, cols: list[int]) -> np.ndarray:
 
 
 # LINEAR REGRESSION IMPLEMENTATIONS (OLS, Mini-batch GD, WLS)
-
 def fit_ols(Phi: np.ndarray, y: np.ndarray, bias_is_first: bool = True) -> np.ndarray:
     # Normal Equations: w = (Phi^T Phi)^(-1) Phi^T y
     PhiT_Phi = Phi.T @ Phi
@@ -631,7 +628,6 @@ def backward_elimination(Phi_train, y_train, Phi_val, y_val, target_features, la
     return features
 
 # KERNEL RIDGE REGRESSION 
-
 def rbf_kernel_matrix(X1: np.ndarray, X2: np.ndarray, gamma: float = 1.0) -> np.ndarray:
     # Calculate the rbf (gaussian) kernel matrix between two sets of data points.
     dists = cdist(X1, X2, metric='sqeuclidean')
@@ -653,7 +649,6 @@ def predict_kernel_ridge(K_test: np.ndarray, alpha: np.ndarray) -> np.ndarray:
     return K_test @ alpha
 
 # GAUSSIAN PROCESS REGRESSION 
-
 def gp_lml_and_grad(theta: np.ndarray, X: np.ndarray, y: np.ndarray) -> tuple:
     # Calculate the log-marginal-likelihood and its gradients for gpr using an rbf kernel.
     # The theta array contains [log(sigma_f), log(l), log(sigma_n)].
@@ -751,9 +746,6 @@ def predict_gp(X_train: np.ndarray, y_train: np.ndarray, X_test: np.ndarray, the
     return mu, np.maximum(var, 0)
 
 def evaluate_and_print(name, y_true, y_pred):
-    """
-    Calculate metrics and print them in a formatted table row.
-    """
     # Calculate metrics 
     eval_metrics = metrics(y_true, y_pred) 
     test_mse = mse(y_true, y_pred)
@@ -763,7 +755,6 @@ def evaluate_and_print(name, y_true, y_pred):
 
 # ROBUST REGRESSION — IRLS with Huber Loss
 def huber_loss(residuals, delta):
-    """Tính Huber Loss cho từng phần tử."""
     abs_r = np.abs(residuals)
     loss = np.where(
         abs_r <= delta,
@@ -785,21 +776,6 @@ def huber_weights(residuals, delta):
 
 
 def fit_irls_huber(Phi, y, delta=1.345, max_iter=50, tol=1e-6, lam=0.0):
-    """
-    Hồi quy bền vững bằng IRLS với Huber Loss.
-    
-    Parameters:
-        Phi      : Ma trận đặc trưng (N x D)
-        y        : Vector mục tiêu (N,)
-        delta    : Ngưỡng Huber — điểm chuyển từ L2 sang L1
-        max_iter : Số vòng lặp tối đa
-        tol      : Ngưỡng hội tụ (thay đổi trọng số w giữa 2 vòng lặp)
-        lam      : Hệ số regularization (Ridge) — mặc định 0 (không regularize)
-    
-    Returns:
-        w            : Trọng số tối ưu
-        loss_history : Lịch sử Huber Loss qua từng vòng lặp
-    """
     N, D = Phi.shape
     
     # Bước 0: Khởi tạo bằng OLS (hoặc Ridge nếu lam > 0)
@@ -848,22 +824,7 @@ def fit_irls_huber(Phi, y, delta=1.345, max_iter=50, tol=1e-6, lam=0.0):
     
     return w, loss_history
 
-# OUTLIER INJECTION — For Sensitivity Analysis
-
 def inject_outliers(y, fraction=0.05, multiplier=10, seed=42):
-    """
-    Chèn outliers nhân tạo vào vector y.
-    
-    Parameters:
-        y          : Vector mục tiêu gốc
-        fraction   : Tỉ lệ mẫu bị biến thành outlier (0.05 = 5%)
-        multiplier : Hệ số nhân để tạo outlier (y_outlier = y_mean + multiplier * y_std)
-        seed       : Random seed
-    
-    Returns:
-        y_corrupted    : Vector y đã bị chèn outlier
-        outlier_mask   : Boolean array đánh dấu vị trí outlier
-    """
     rng = np.random.default_rng(seed)
     y_corrupted = y.copy().astype(float)
     n = len(y)
@@ -883,27 +844,8 @@ def inject_outliers(y, fraction=0.05, multiplier=10, seed=42):
 
 
 # BIAS-VARIANCE DECOMPOSITION — via Bootstrapping
-
 def bias_variance_decomposition(Phi_train, y_train, Phi_test, y_test,
                                  lambdas, n_bootstrap=200, seed=42):
-    """
-    Phân tích Bias-Variance Tradeoff bằng Bootstrapping.
-    
-    Parameters:
-        Phi_train   : Ma trận đặc trưng tập train (N_train x D)
-        y_train     : Vector mục tiêu tập train (N_train,)
-        Phi_test    : Ma trận đặc trưng tập test (N_test x D) 
-        y_test      : Vector mục tiêu tập test (N_test,)
-        lambdas     : Danh sách các giá trị lambda
-        n_bootstrap : Số lần lặp bootstrap
-        seed        : Random seed
-    
-    Returns:
-        bias_squared_list : Bias² cho mỗi lambda
-        variance_list     : Variance cho mỗi lambda
-        mse_list          : MSE tổng cho mỗi lambda
-    """
-    
     rng = np.random.default_rng(seed)
     N_train = Phi_train.shape[0]
     N_test = Phi_test.shape[0]
@@ -1108,3 +1050,55 @@ def statistical_test_models(scores_a, scores_b, metric_name='MSE',
         'significant': is_significant,
     }
 
+# BAYESIAN LINEAR REGRESSION
+def gaussian_rbf(X: np.ndarray, centers: np.ndarray, s: float) -> np.ndarray:
+    X = np.atleast_2d(X).reshape(-1, 1)          # (N, 1)
+    centers = np.atleast_1d(centers).ravel()      # (M,)
+
+    # Broadcast difference: (N, 1) - (1, M) = (N, M)
+    diff = X - centers[np.newaxis, :]             # (N, M)
+    return np.exp(-(diff ** 2) / (2.0 * s ** 2))
+
+
+def compute_posterior(
+    Phi_train: np.ndarray,
+    t_train: np.ndarray,
+    alpha: float,
+    beta: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    t_train = np.atleast_1d(t_train).ravel()   # ensure shape (N,)
+    M = Phi_train.shape[1]
+
+    # Compute the inverse of S_N:  S_N^{-1} = alpha*I + beta * Phi^T @ Phi
+    S_N_inv = alpha * np.eye(M) + beta * (Phi_train.T @ Phi_train)
+
+    # Solve S_N^{-1} @ S_N = I  =>  S_N = solve(S_N_inv, I)
+    S_N = np.linalg.solve(S_N_inv, np.eye(M))
+
+    # Posterior mean:  m_N = beta * S_N @ Phi^T @ t
+    m_N = beta * S_N @ Phi_train.T @ t_train
+
+    return m_N, S_N
+
+
+def compute_predictive_distribution(
+    Phi_test: np.ndarray,
+    m_N: np.ndarray,
+    S_N: np.ndarray,
+    beta: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    # Predictive mean: f* = Phi_test @ m_N
+    f_star = Phi_test @ m_N                              # (N_test,)
+
+    # Epistemic variance (model uncertainty): diag(Phi_test @ S_N @ Phi_test^T)
+    # Efficient computation: row-wise dot of (Phi_test @ S_N) and Phi_test
+    epistemic_var = np.sum((Phi_test @ S_N) * Phi_test, axis=1)   # (N_test,)
+
+    # Aleatoric variance (irreducible noise): 1 / beta
+    aleatoric_var = 1.0 / beta
+
+    # Total predictive variance and standard deviation
+    sigma_N_sq = aleatoric_var + epistemic_var           # (N_test,)
+    sigma_N = np.sqrt(np.maximum(sigma_N_sq, 0.0))      # guard against tiny negatives
+
+    return f_star, sigma_N
