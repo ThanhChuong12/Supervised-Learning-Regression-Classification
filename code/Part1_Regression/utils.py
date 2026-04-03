@@ -1,207 +1,9 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 from sklearn.model_selection import KFold
-
-def soft_threshold(rho: float, lam: float) -> float:
-    # ép trọng số của các đặc trưng không quan trọng về 0
-    if rho < -lam:
-        return rho + lam
-    elif rho > lam:
-        return rho - lam
-    else:
-        return 0.0
-
-def fit_lasso_cd(Phi: np.ndarray, y: np.ndarray, lam: float, num_iters: int = 1000, tol: float = 1e-4, bias_is_first: bool = True, w_init: np.ndarray = None) -> np.ndarray:
-    n_samples, n_features = Phi.shape
-    
-    # Dùng w_init nếu có, ngược lại tạo mảng 0
-    w = np.zeros(n_features) if w_init is None else w_init.copy()
-    
-    # z là tổng bình phương các phần tử trên từng cột của ma trận Phi
-    z = np.sum(Phi**2, axis=0)
-    
-    for _ in range(num_iters):
-        w_old = w.copy()
-        
-        for j in range(n_features):
-            if z[j] == 0:
-                continue
-            
-            # tính sai số dự đoán hiện tại
-            y_pred = Phi @ w
-            
-            # rho_j là độ tương quan giữa đặc trưng j và sai số (khi tạm bỏ w_j)
-            rho_j = Phi[:, j].T @ (y - y_pred) + w[j] * z[j]
-            
-            # cột đầu tiên (bias) không bị phạt, các cột khác sẽ đi qua bộ lọc soft threshold
-            if bias_is_first and j == 0:
-                w[j] = rho_j / z[j]  
-            else:
-                w[j] = soft_threshold(rho_j, lam) / z[j]
-                
-        # dừng thuật toán nếu mức độ thay đổi của w quá nhỏ (đã hội tụ)
-        if np.max(np.abs(w - w_old)) < tol:
-            break
-            
-    return w
-
-def fit_ridge(Phi: np.ndarray, y: np.ndarray, lam: float, bias_is_first: bool = True) -> np.ndarray:
-    # p là số lượng đặc trưng của ma trận đầu vào
-    P = Phi.shape[1]
-    
-    # tính phần lõi của phương trình chuẩn (normal equation)
-    A = Phi.T @ Phi
-    
-    # tạo ma trận đường chéo chứa các hệ số phạt lambda
-    reg = lam * np.eye(P)
-    
-    # không áp dụng hình phạt l2 lên hệ số tự do (bias) ở vị trí đầu tiên
-    if bias_is_first:
-        reg[0, 0] = 0.0
-        
-    # tìm trọng số w bằng cách giải hệ phương trình tuyến tính
-    return np.linalg.solve(A + reg, Phi.T @ y)
-
-def time_series_cv_indices(n_samples: int, k: int = 10, random_seed: int = 42):
-    # Chia dữ liệu làm (k + 1) phần bằng nhau
-    chunk_size = n_samples // (k + 1)
-    
-    folds = []
-    
-    for i in range(1, k + 1):
-        # Tập Train: Từ đầu cho đến chunk hiện tại 
-        train_end = i * chunk_size
-        train_idx = np.arange(0, train_end)
-        
-        # Tập Validation
-        val_end = (i + 1) * chunk_size if i < k else n_samples
-        val_idx = np.arange(train_end, val_end)
-        
-        folds.append((train_idx, val_idx))
-        
-    return folds
-
-def kfold_cv_lasso(Phi: np.ndarray, y: np.ndarray, lambdas: list, k: int = 10):
-    # sắp xếp lambda giảm dần để warm start hiệu quả
-    lambdas = sorted(lambdas, reverse=True)
-    
-    # gọi hàm chia index
-    folds = kfold_indices(len(Phi), k=k)
-    
-    cv_errors = []
-    
-    # tạo danh sách lưu trọng số w khởi tạo cho từng fold.
-    # vì có k fold, ta cần k vạch xuất phát khác nhau. ban đầu tất cả là None (sẽ khởi tạo w=0)
-    w_inits = [None] * k
-    
-    for lam in lambdas:
-        fold_errors = []
-        
-        for i, (train_idx, val_idx) in enumerate(folds):
-            Phi_tr, y_tr = Phi[train_idx], y[train_idx]
-            Phi_va, y_va = Phi[val_idx], y[val_idx]
-            
-            # fit mô hình với Warm Start: truyền w_inits[i] của vòng lambda trước vào
-            w = fit_lasso_cd(Phi_tr, y_tr, lam, w_init=w_inits[i])
-            
-            # cập nhật lại vạch xuất phát cho fold thứ i để dùng cho mức lambda tiếp theo
-            w_inits[i] = w.copy()
-            
-            # tính lỗi trên tập Validation
-            y_pred = Phi_va @ w
-            mse = np.mean((y_va - y_pred)**2)
-            fold_errors.append(mse)
-            
-        # lưu lỗi trung bình của k folds tại mức lambda hiện tại
-        cv_errors.append(np.mean(fold_errors))
-        
-    # tìm lambda có lỗi validation trung bình nhỏ nhất
-    best_idx = np.argmin(cv_errors)
-    best_lam = lambdas[best_idx]
-    
-    return best_lam, cv_errors, lambdas
-
-
-def fit_elastic_net_cd(Phi: np.ndarray, y: np.ndarray, lam1: float, lam2: float, num_iters: int = 1000, tol: float = 1e-4, bias_is_first: bool = True) -> np.ndarray:
-    # cài đặt elastic net bằng coordinate descent
-    n_samples, n_features = Phi.shape
-    w = np.zeros(n_features)
-    
-    # z là tổng bình phương các phần tử trên từng cột
-    z = np.sum(Phi**2, axis=0)
-    
-    for _ in range(num_iters):
-        w_old = w.copy()
-        
-        for j in range(n_features):
-            if z[j] == 0: continue
-            
-            # tính sai số dự đoán hiện tại
-            y_pred = Phi @ w
-            
-            # rho_j là độ tương quan giữa đặc trưng j và phần sai số
-            rho_j = Phi[:, j].T @ (y - y_pred) + w[j] * z[j]
-            
-            if bias_is_first and j == 0:
-                # hệ số tự do không bị phạt
-                w[j] = rho_j / z[j]
-            else:
-                # tử số là l1, mẫu số cộng thêm l2 
-                w[j] = soft_threshold(rho_j, lam1) / (z[j] + lam2)
-                
-        # dừng thuật toán nếu trọng số gần như không đổi
-        if np.max(np.abs(w - w_old)) < tol: break
-        
-    return w
-
-def forward_selection(Phi_train, y_train, Phi_val, y_val, k_features, lam=0.1):
-    selected = [0] # luôn giữ lại cột bias (cột 0)
-    remaining = list(range(1, Phi_train.shape[1]))
-    
-    for _ in range(k_features):
-        best_feature = None
-        best_error = float("inf")
-        
-        for f in remaining:
-            trial = selected + [f]
-            # Fit mô hình trên tập train
-            w = fit_ridge(Phi_train[:, trial], y_train, lam)
-            # Dự đoán và tính lỗi trên tập validation
-            y_pred_val = Phi_val[:, trial] @ w
-            error = np.mean((y_val - y_pred_val)**2)
-            
-            if error < best_error:
-                best_error = error
-                best_feature = f
-                
-        selected.append(best_feature)
-        remaining.remove(best_feature)
-        
-    return selected
-
-def backward_elimination(Phi_train, y_train, Phi_val, y_val, target_features, lam=0.1):
-    features = list(range(Phi_train.shape[1]))
-    
-    while len(features) > target_features:
-        best_error = float("inf")
-        worst_feature = None
-        
-        for f in features:
-            if f == 0: continue 
-                
-            trial = [x for x in features if x != f]
-            w = fit_ridge(Phi_train[:, trial], y_train, lam)
-            y_pred_val = Phi_val[:, trial] @ w
-            error = np.mean((y_val - y_pred_val)**2)
-            
-            if error < best_error:
-                best_error = error
-                worst_feature = f
-                
-        features.remove(worst_feature)
-        
-    return features
+from scipy.spatial.distance import cdist
 
 def sigmoid(z: np.ndarray) -> np.ndarray:
     z = np.clip(z, -50, 50)
@@ -628,11 +430,338 @@ def fit_wls(Phi: np.ndarray, y: np.ndarray, weights: np.ndarray,
     
     return w
 
+def soft_threshold(rho: float, lam: float) -> float:
+    # force the weights of unimportant features to zero
+    if rho < -lam:
+        return rho + lam
+    elif rho > lam:
+        return rho - lam
+    else:
+        return 0.0
 
-# ============================================================
+def fit_lasso_cd(Phi: np.ndarray, y: np.ndarray, lam: float, num_iters: int = 1000, tol: float = 1e-4, bias_is_first: bool = True, w_init: np.ndarray = None) -> np.ndarray:
+    n_samples, n_features = Phi.shape
+    
+    # Use w_init if provided, otherwise initialize with zeros
+    w = np.zeros(n_features) if w_init is None else w_init.copy()
+    
+    # z is the sum of squares of the elements in each column of matrix Phi
+    z = np.sum(Phi**2, axis=0)
+    
+    for _ in range(num_iters):
+        w_old = w.copy()
+        
+        for j in range(n_features):
+            if z[j] == 0:
+                continue
+            
+            # compute the current prediction error
+            y_pred = Phi @ w
+            
+            # rho_j is the correlation between feature j and the residual (temporarily excluding w_j)
+            rho_j = Phi[:, j].T @ (y - y_pred) + w[j] * z[j]
+            
+           # the first column (bias) is not penalized, other columns go through soft-thresholding
+            if bias_is_first and j == 0:
+                w[j] = rho_j / z[j]  
+            else:
+                w[j] = soft_threshold(rho_j, lam) / z[j]
+                
+        # stop the algorithm if the change in w is very small (converged)
+        if np.max(np.abs(w - w_old)) < tol:
+            break
+            
+    return w
+
+def fit_ridge(Phi: np.ndarray, y: np.ndarray, lam: float, bias_is_first: bool = True) -> np.ndarray:
+    # P is the number of features in the input matrix
+    P = Phi.shape[1]
+    
+    # compute the core part of the normal equation
+    A = Phi.T @ Phi
+    
+    # create a diagonal matrix containing the lambda penalty coefficients
+    reg = lam * np.eye(P)
+    
+    # do not apply L2 penalty to the intercept term (bias) in the first position
+    if bias_is_first:
+        reg[0, 0] = 0.0
+        
+     # find the weight vector w by solving the linear system
+    return np.linalg.solve(A + reg, Phi.T @ y)
+
+def time_series_cv_indices(n_samples: int, k: int = 10, random_seed: int = 42):
+    # Split the data into (k + 1) equal parts
+    chunk_size = n_samples // (k + 1)
+    
+    folds = []
+    
+    for i in range(1, k + 1):
+        # Training set: from the beginning up to the current chunk 
+        train_end = i * chunk_size
+        train_idx = np.arange(0, train_end)
+        
+         # Validation set
+        val_end = (i + 1) * chunk_size if i < k else n_samples
+        val_idx = np.arange(train_end, val_end)
+        
+        folds.append((train_idx, val_idx))
+        
+    return folds
+
+def kfold_cv_lasso(Phi: np.ndarray, y: np.ndarray, lambdas: list, k: int = 10):
+    # sort lambdas in descending order to make warm start more effective
+    lambdas = sorted(lambdas, reverse=True)
+    
+    # call the function to split indices into folds
+    folds = time_series_cv_indices(len(Phi), k=k)
+    
+    cv_errors = []
+    
+    # create a list to store the initial weights w for each fold.
+    # since there are k folds, we need k different starting points. initially all are None (will initialize w=0)
+    w_inits = [None] * k
+    
+    for lam in lambdas:
+        fold_errors = []
+        
+        for i, (train_idx, val_idx) in enumerate(folds):
+            Phi_tr, y_tr = Phi[train_idx], y[train_idx]
+            Phi_va, y_va = Phi[val_idx], y[val_idx]
+            
+             # fit the model with Warm Start: pass w_inits[i] from the previous lambda loop
+            w = fit_lasso_cd(Phi_tr, y_tr, lam, w_init=w_inits[i])
+            
+            # update the starting point for fold i to use for the next lambda value
+            w_inits[i] = w.copy()
+            
+            # compute the error on the validation set
+            y_pred = Phi_va @ w
+            mse = np.mean((y_va - y_pred)**2)
+            fold_errors.append(mse)
+            
+        # store the average error across k folds for the current lambda
+        cv_errors.append(np.mean(fold_errors))
+        
+    # find the lambda with the smallest average validation error
+    best_idx = np.argmin(cv_errors)
+    best_lam = lambdas[best_idx]
+    
+    return best_lam, cv_errors, lambdas
+
+
+def fit_elastic_net_cd(Phi: np.ndarray, y: np.ndarray, lam1: float, lam2: float, num_iters: int = 1000, tol: float = 1e-4, bias_is_first: bool = True) -> np.ndarray:
+    # implement Elastic Net using Coordinate Descent
+    n_samples, n_features = Phi.shape
+    w = np.zeros(n_features)
+    
+    # z is the sum of squares of the elements in each column
+    z = np.sum(Phi**2, axis=0)
+    
+    for _ in range(num_iters):
+        w_old = w.copy()
+        
+        for j in range(n_features):
+            if z[j] == 0: continue
+            
+            # compute the current prediction error
+            y_pred = Phi @ w
+            
+            # rho_j is the correlation between feature j and the residual error
+            rho_j = Phi[:, j].T @ (y - y_pred) + w[j] * z[j]
+            
+            if bias_is_first and j == 0:
+                # the intercept term is not penalized
+                w[j] = rho_j / z[j]
+            else:
+                 # numerator applies L1 penalty, denominator adds L2 penalty 
+                w[j] = soft_threshold(rho_j, lam1) / (z[j] + lam2)
+                
+        # stop the algorithm if the weights change very little
+        if np.max(np.abs(w - w_old)) < tol: break
+        
+    return w
+
+def forward_selection(Phi_train, y_train, Phi_val, y_val, k_features, lam=0.1):
+    selected = [0] # always keep the bias column (column 0)
+    remaining = list(range(1, Phi_train.shape[1]))
+    
+    for _ in range(k_features):
+        best_feature = None
+        best_error = float("inf")
+        
+        for f in remaining:
+            trial = selected + [f]
+            # Fit the model on the training set
+            w = fit_ridge(Phi_train[:, trial], y_train, lam)
+            # Predict and compute the error on the validation set
+            y_pred_val = Phi_val[:, trial] @ w
+            error = np.mean((y_val - y_pred_val)**2)
+            
+            if error < best_error:
+                best_error = error
+                best_feature = f
+                
+        selected.append(best_feature)
+        remaining.remove(best_feature)
+        
+    return selected
+
+def backward_elimination(Phi_train, y_train, Phi_val, y_val, target_features, lam=0.1):
+    features = list(range(Phi_train.shape[1]))
+    
+    while len(features) > target_features:
+        best_error = float("inf")
+        worst_feature = None
+        
+        for f in features:
+            if f == 0: continue 
+                
+            trial = [x for x in features if x != f]
+            w = fit_ridge(Phi_train[:, trial], y_train, lam)
+            y_pred_val = Phi_val[:, trial] @ w
+            error = np.mean((y_val - y_pred_val)**2)
+            
+            if error < best_error:
+                best_error = error
+                worst_feature = f
+                
+        features.remove(worst_feature)
+        
+    return features
+
+# KERNEL RIDGE REGRESSION 
+
+def rbf_kernel_matrix(X1: np.ndarray, X2: np.ndarray, gamma: float = 1.0) -> np.ndarray:
+    # Calculate the rbf (gaussian) kernel matrix between two sets of data points.
+    dists = cdist(X1, X2, metric='sqeuclidean')
+    return np.exp(-gamma * dists)
+
+def poly_kernel_matrix(X1: np.ndarray, X2: np.ndarray, degree: int = 3, coef0: float = 1.0) -> np.ndarray:
+    # Calculate the polynomial kernel matrix.
+    return (X1 @ X2.T + coef0) ** degree
+
+def fit_kernel_ridge(K_train: np.ndarray, y_train: np.ndarray, lam: float) -> np.ndarray:
+    # Train the kernel ridge regression model and return the dual variables (alpha).
+    n = K_train.shape[0]
+    # Solve the linear system (K + lambda * I) * alpha = y to find alpha.
+    alpha = np.linalg.solve(K_train + lam * np.eye(n), y_train)
+    return alpha
+
+def predict_kernel_ridge(K_test: np.ndarray, alpha: np.ndarray) -> np.ndarray:
+    # Predict the target values using the learned alpha weights and the test kernel matrix.
+    return K_test @ alpha
+
+# GAUSSIAN PROCESS REGRESSION 
+
+def gp_lml_and_grad(theta: np.ndarray, X: np.ndarray, y: np.ndarray) -> tuple:
+    # Calculate the log-marginal-likelihood and its gradients for gpr using an rbf kernel.
+    # The theta array contains [log(sigma_f), log(l), log(sigma_n)].
+    sigma_f, l, sigma_n = np.exp(theta)
+    n = X.shape[0]
+    
+    # Compute the rbf kernel matrix for the training data.
+    dists = cdist(X, X, metric='sqeuclidean')
+    K = (sigma_f ** 2) * np.exp(-0.5 * dists / (l ** 2))
+    
+    # Add noise variance and a small jitter term to the diagonal for numerical stability.
+    Ky = K + (sigma_n ** 2) * np.eye(n) + 1e-8 * np.eye(n)
+    
+    try:
+        # Use cholesky decomposition to stably invert the covariance matrix.
+        L = np.linalg.cholesky(Ky)
+        alpha = np.linalg.solve(L.T, np.linalg.solve(L, y))
+        invKy = np.linalg.solve(L.T, np.linalg.solve(L, np.eye(n)))
+    except np.linalg.LinAlgError:
+        # Return negative infinity if the matrix is not positive definite.
+        return -np.inf, np.zeros(3)
+    
+    # Compute the scalar log-marginal likelihood.
+    lml = -0.5 * y.T @ alpha - np.sum(np.log(np.diag(L))) - 0.5 * n * np.log(2 * np.pi)
+    
+    # Compute the matrix W used in gradient calculations.
+    W = np.outer(alpha, alpha) - invKy
+    
+    # Calculate the gradient with respect to log(sigma_f).
+    dK_dlsf = 2 * K
+    grad_sf = 0.5 * np.trace(W @ dK_dlsf)
+    
+    # Calculate the gradient with respect to log(l).
+    dK_dll = K * (dists / (l ** 2))
+    grad_l = 0.5 * np.trace(W @ dK_dll)
+    
+    # Calculate the gradient with respect to log(sigma_n).
+    dK_dlsn = 2 * (sigma_n ** 2) * np.eye(n)
+    grad_sn = 0.5 * np.trace(W @ dK_dlsn)
+    
+    return lml, np.array([grad_sf, grad_l, grad_sn])
+
+def optimize_gp_hyperparameters(X: np.ndarray, y: np.ndarray, init_theta: np.ndarray = None, lr: float = 0.01, max_iters: int = 100) -> tuple:
+    # Optimize the kernel hyperparameters using the gradient ascent algorithm.
+    if init_theta is None:
+        # Initialize log hyperparameters to zero if not provided.
+        theta = np.array([0.0, 0.0, 0.0])
+    else:
+        theta = np.array(init_theta)
+        
+    lml_history = []
+    
+    # Iteratively update the hyperparameters to maximize the log-marginal likelihood.
+    for i in range(max_iters):
+        iter_start = time.time()
+        lml, grad = gp_lml_and_grad(theta, X, y)
+        if lml == -np.inf:
+            break
+        
+        # Apply the gradient ascent update rule.
+        theta = theta + lr * grad
+        lml_history.append(lml)
+        iter_time = time.time() - iter_start
+        print(f"Iteration {i+1}/{max_iters} - LML: {lml:.4f} - Thời gian: {iter_time:.4f}s")
+        
+    return theta, lml_history
+
+def predict_gp(X_train: np.ndarray, y_train: np.ndarray, X_test: np.ndarray, theta: np.ndarray) -> tuple:
+    # Predict the posterior predictive mean and variance for new test points.
+    sigma_f, l, sigma_n = np.exp(theta)
+    n_train = X_train.shape[0]
+    
+    # Compute the kernel matrices required for prediction.
+    dists_train = cdist(X_train, X_train, 'sqeuclidean')
+    K = (sigma_f ** 2) * np.exp(-0.5 * dists_train / (l ** 2))
+    Ky = K + (sigma_n ** 2) * np.eye(n_train) + 1e-8 * np.eye(n_train)
+    
+    dists_cross = cdist(X_train, X_test, 'sqeuclidean')
+    K_cross = (sigma_f ** 2) * np.exp(-0.5 * dists_cross / (l ** 2))
+    
+    dists_test = cdist(X_test, X_test, 'sqeuclidean')
+    K_test = (sigma_f ** 2) * np.exp(-0.5 * dists_test / (l ** 2))
+    
+    # Use cholesky decomposition for stable computation.
+    L = np.linalg.cholesky(Ky)
+    alpha = np.linalg.solve(L.T, np.linalg.solve(L, y_train))
+    
+    # Calculate the posterior mean.
+    mu = K_cross.T @ alpha
+    
+    # Calculate the posterior variance and ensure it is non-negative.
+    v = np.linalg.solve(L, K_cross)
+    var = np.diag(K_test) - np.sum(v ** 2, axis=0)
+    
+    return mu, np.maximum(var, 0)
+
+def evaluate_and_print(name, y_true, y_pred):
+    """
+    Calculate metrics and print them in a formatted table row.
+    """
+    # Calculate metrics 
+    eval_metrics = metrics(y_true, y_pred) 
+    test_mse = mse(y_true, y_pred)
+    
+    # Print formatted row
+    print(f"{name:<35} | {test_mse:<10.4f} | {eval_metrics['RMSE']:<10.4f} | {eval_metrics['MAE']:<10.4f} | {eval_metrics['R2']:<10.4f}")
+
 # ROBUST REGRESSION — IRLS with Huber Loss
-# ============================================================
-
 def huber_loss(residuals, delta):
     """Tính Huber Loss cho từng phần tử."""
     abs_r = np.abs(residuals)
@@ -719,10 +848,7 @@ def fit_irls_huber(Phi, y, delta=1.345, max_iter=50, tol=1e-6, lam=0.0):
     
     return w, loss_history
 
-
-# ============================================================
 # OUTLIER INJECTION — For Sensitivity Analysis
-# ============================================================
 
 def inject_outliers(y, fraction=0.05, multiplier=10, seed=42):
     """
@@ -756,9 +882,7 @@ def inject_outliers(y, fraction=0.05, multiplier=10, seed=42):
     return y_corrupted, outlier_mask
 
 
-# ============================================================
 # BIAS-VARIANCE DECOMPOSITION — via Bootstrapping
-# ============================================================
 
 def bias_variance_decomposition(Phi_train, y_train, Phi_test, y_test,
                                  lambdas, n_bootstrap=200, seed=42):
@@ -779,7 +903,6 @@ def bias_variance_decomposition(Phi_train, y_train, Phi_test, y_test,
         variance_list     : Variance cho mỗi lambda
         mse_list          : MSE tổng cho mỗi lambda
     """
-    import time
     
     rng = np.random.default_rng(seed)
     N_train = Phi_train.shape[0]
