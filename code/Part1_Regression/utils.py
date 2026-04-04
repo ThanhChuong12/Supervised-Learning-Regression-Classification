@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import time
 from sklearn.model_selection import KFold
 from scipy.spatial.distance import cdist
+from scipy.stats import ttest_rel, wilcoxon as scipy_wilcoxon
 
 def sigmoid(z: np.ndarray) -> np.ndarray:
     z = np.clip(z, -50, 50)
@@ -1029,7 +1030,6 @@ def statistical_test_models(scores_a, scores_b, metric_name='MSE',
     Returns:
         stat, p_value, is_significant (at alpha=0.05)
     """
-    from scipy.stats import ttest_rel, wilcoxon as scipy_wilcoxon
     
     a = np.array(scores_a)
     b = np.array(scores_b)
