@@ -1105,13 +1105,15 @@ def compute_predictive_distribution(
 
 # EVIDENCE MAXIMIZATION (EMPIRICAL BAYES)
 def evidence_maximization(
-    Phi_train: np.ndarray,
-    t_train: np.ndarray,
-    alpha_init: float = 1.0,
-    beta_init: float = 1.0,
-    max_iter: int = 100,
-    tol: float = 1e-4
-) -> tuple[float, float, np.ndarray, np.ndarray, list]:
+    Phi_train,
+    t_train,
+    alpha_init=1.0,
+    beta_init=1.0,
+    max_iter=100,
+    tol=1e-6
+):
+    import numpy as np
+    
     N, M = Phi_train.shape
     alpha = alpha_init
     beta = beta_init
@@ -1119,8 +1121,9 @@ def evidence_maximization(
     # Ensure t_train is 1D array
     t_train = np.atleast_1d(t_train).ravel()
     
-    # Compute eigenvalues of Phi^T @ Phi once (symmetric positive semi-definite)
-    eigvals = np.linalg.eigvalsh(Phi_train.T @ Phi_train)
+    # Precompute Phi^T @ Phi for efficiency
+    PhiT_Phi = Phi_train.T @ Phi_train
+    PhiT_t = Phi_train.T @ t_train
     
     # Store history for analysis
     history = []
@@ -1129,55 +1132,95 @@ def evidence_maximization(
         alpha_old = alpha
         beta_old = beta
         
-        # E-step equivalent: Compute posterior with current alpha, beta
-        S_N_inv = alpha * np.eye(M) + beta * (Phi_train.T @ Phi_train)
+        # E-step: Compute posterior with current alpha, beta
+        # S_N^{-1} = alpha*I + beta*Phi^T*Phi
+        S_N_inv = alpha * np.eye(M) + beta * PhiT_Phi
         
         try:
             S_N = np.linalg.inv(S_N_inv)
         except np.linalg.LinAlgError:
             S_N = np.linalg.pinv(S_N_inv)
         
-        m_N = beta * S_N @ Phi_train.T @ t_train
+        # m_N = beta * S_N * Phi^T * t
+        m_N = beta * S_N @ PhiT_t
         
-        # M-step equivalent: Compute effective number of parameters (gamma)
-        gamma = np.sum((beta * eigvals) / (alpha + beta * eigvals))
-        
-        # Update alpha using re-estimation equation
-        m_N_norm_sq = np.dot(m_N, m_N)
-        if m_N_norm_sq > 1e-10:
-            alpha = gamma / m_N_norm_sq
-        else:
-            alpha = alpha_old
-        
-        # Update beta using re-estimation equation
+        # Compute residuals and norms BEFORE updating
         residuals = t_train - Phi_train @ m_N
         residual_sum_sq = np.sum(residuals ** 2)
+        m_N_norm_sq = np.dot(m_N, m_N)
         
-        if (N - gamma) > 1e-10 and residual_sum_sq > 1e-10:
-            beta = (N - gamma) / residual_sum_sq
-        else:
-            beta = beta_old
-        
-        # Compute log marginal likelihood (evidence) for monitoring
+        # Compute log marginal likelihood (evidence) BEFORE updating α and β
+        # This way we track the evidence at the current parameters
         try:
-            C = (1.0/beta) * np.eye(N) + (1.0/alpha) * (Phi_train @ Phi_train.T)
-            L = np.linalg.cholesky(C)
-            log_det_C = 2.0 * np.sum(np.log(np.diag(L)))
-            alpha_vec = np.linalg.solve(L, t_train)
-            t_C_inv_t = np.dot(alpha_vec, alpha_vec)
-            log_evidence = -0.5 * (N * np.log(2 * np.pi) + log_det_C + t_C_inv_t)
-        except np.linalg.LinAlgError:
+            # Compute log|S_N|
+            try:
+                L = np.linalg.cholesky(S_N)
+                log_det_S_N = 2.0 * np.sum(np.log(np.diag(L)))
+            except np.linalg.LinAlgError:
+                eigvals_S_N = np.linalg.eigvalsh(S_N)
+                log_det_S_N = np.sum(np.log(np.maximum(eigvals_S_N, 1e-10)))
+            
+            # log|S_N^{-1}| = -log|S_N|
+            log_det_S_N_inv = -log_det_S_N
+            
+            # log|C| = -N*log(β) + log|S_N^{-1}| - M*log(α)
+            log_det_C = -N * np.log(beta) + log_det_S_N_inv - M * np.log(alpha)
+            
+            # t^T*C^{-1}*t = β*||t||² - β²*t^T*Φ*S_N*Φ^T*t
+            t_norm_sq = np.sum(t_train ** 2)
+            quad_form = beta * t_norm_sq - (beta**2) * (PhiT_t.T @ S_N @ PhiT_t)
+            
+            # Final evidence
+            log_evidence = -(N / 2.0) * np.log(2.0 * np.pi) - (1.0 / 2.0) * log_det_C - (1.0 / 2.0) * quad_form
+            
+        except (np.linalg.LinAlgError, ValueError):
             log_evidence = np.nan
         
+        # M-step: Compute eigenvalues for gamma calculation
+        # gamma = sum_i (lambda_i / (alpha + lambda_i))
+        # where lambda_i are eigenvalues of beta * Phi^T * Phi
+        eigvals = np.linalg.eigvalsh(beta * PhiT_Phi)
+        gamma = np.sum(eigvals / (alpha + eigvals))
+        
+        # Ensure gamma is in valid range [0, M]
+        gamma = np.clip(gamma, 1e-10, M)
+        
+        # Update alpha using re-estimation equation (Bishop 3.92)
+        # alpha_new = gamma / (m_N^T * m_N)
+        if m_N_norm_sq > 1e-10:
+            alpha_new = gamma / m_N_norm_sq
+        else:
+            alpha_new = alpha_old
+        
+        # Update beta using re-estimation equation (Bishop 3.95)
+        # beta_new = (N - gamma) / ||t - Phi*m_N||^2
+        if residual_sum_sq > 1e-10:
+            beta_new = (N - gamma) / residual_sum_sq
+        else:
+            beta_new = beta_old
+        
+        # NO DAMPING - use direct update for faster convergence
+        alpha = alpha_new
+        beta = beta_new
+        
+        # Prevent numerical issues
+        alpha = np.clip(alpha, 1e-10, 1e10)
+        beta = np.clip(beta, 1e-10, 1e10)
+        
         # Compute changes for convergence check
-        delta_alpha = abs(alpha - alpha_old)
-        delta_beta = abs(beta - beta_old)
+        delta_alpha = abs(alpha - alpha_old) / (abs(alpha_old) + 1e-10)
+        delta_beta = abs(beta - beta_old) / (abs(beta_old) + 1e-10)
         
         # Store history
         history.append((iteration + 1, alpha, beta, gamma, log_evidence, delta_alpha, delta_beta))
         
+        # Print progress
+        if (iteration + 1) % 5 == 0 or iteration == 0:
+            print(f"Iter {iteration+1:3d}: α={alpha:8.4f}, β={beta:8.6f}, γ={gamma:5.2f}, Evidence={log_evidence:12.2f}")
+        
         # Check convergence
-        if delta_alpha < tol and delta_beta < tol:
+        if delta_alpha < tol and delta_beta < tol and iteration > 10:
+            print(f"Converged at iteration {iteration+1}")
             break
     
     return alpha, beta, m_N, S_N, history
