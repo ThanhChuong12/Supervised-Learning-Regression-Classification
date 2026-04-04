@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import time
 from sklearn.model_selection import KFold
 from scipy.spatial.distance import cdist
+from scipy.stats import ttest_rel, wilcoxon as scipy_wilcoxon
 
 def sigmoid(z: np.ndarray) -> np.ndarray:
     z = np.clip(z, -50, 50)
@@ -1029,7 +1030,6 @@ def statistical_test_models(scores_a, scores_b, metric_name='MSE',
     Returns:
         stat, p_value, is_significant (at alpha=0.05)
     """
-    from scipy.stats import ttest_rel, wilcoxon as scipy_wilcoxon
     
     a = np.array(scores_a)
     b = np.array(scores_b)
@@ -1102,3 +1102,174 @@ def compute_predictive_distribution(
     sigma_N = np.sqrt(np.maximum(sigma_N_sq, 0.0))      # guard against tiny negatives
 
     return f_star, sigma_N
+
+# EVIDENCE MAXIMIZATION (EMPIRICAL BAYES)
+def evidence_maximization(
+    Phi_train,
+    t_train,
+    alpha_init=1.0,
+    beta_init=1.0,
+    max_iter=100,
+    tol=1e-6
+):
+    import numpy as np
+    
+    N, M = Phi_train.shape
+    alpha = alpha_init
+    beta = beta_init
+    
+    # Ensure t_train is 1D array
+    t_train = np.atleast_1d(t_train).ravel()
+    
+    # Precompute Phi^T @ Phi for efficiency
+    PhiT_Phi = Phi_train.T @ Phi_train
+    PhiT_t = Phi_train.T @ t_train
+    
+    # Store history for analysis
+    history = []
+    
+    for iteration in range(max_iter):
+        alpha_old = alpha
+        beta_old = beta
+        
+        # E-step: Compute posterior with current alpha, beta
+        # S_N^{-1} = alpha*I + beta*Phi^T*Phi
+        S_N_inv = alpha * np.eye(M) + beta * PhiT_Phi
+        
+        try:
+            S_N = np.linalg.inv(S_N_inv)
+        except np.linalg.LinAlgError:
+            S_N = np.linalg.pinv(S_N_inv)
+        
+        # m_N = beta * S_N * Phi^T * t
+        m_N = beta * S_N @ PhiT_t
+        
+        # Compute residuals and norms BEFORE updating
+        residuals = t_train - Phi_train @ m_N
+        residual_sum_sq = np.sum(residuals ** 2)
+        m_N_norm_sq = np.dot(m_N, m_N)
+        
+        # Compute log marginal likelihood (evidence) BEFORE updating α and β
+        # This way we track the evidence at the current parameters
+        try:
+            # Compute log|S_N|
+            try:
+                L = np.linalg.cholesky(S_N)
+                log_det_S_N = 2.0 * np.sum(np.log(np.diag(L)))
+            except np.linalg.LinAlgError:
+                eigvals_S_N = np.linalg.eigvalsh(S_N)
+                log_det_S_N = np.sum(np.log(np.maximum(eigvals_S_N, 1e-10)))
+            
+            # log|S_N^{-1}| = -log|S_N|
+            log_det_S_N_inv = -log_det_S_N
+            
+            # log|C| = -N*log(β) + log|S_N^{-1}| - M*log(α)
+            log_det_C = -N * np.log(beta) + log_det_S_N_inv - M * np.log(alpha)
+            
+            # t^T*C^{-1}*t = β*||t||² - β²*t^T*Φ*S_N*Φ^T*t
+            t_norm_sq = np.sum(t_train ** 2)
+            quad_form = beta * t_norm_sq - (beta**2) * (PhiT_t.T @ S_N @ PhiT_t)
+            
+            # Final evidence
+            log_evidence = -(N / 2.0) * np.log(2.0 * np.pi) - (1.0 / 2.0) * log_det_C - (1.0 / 2.0) * quad_form
+            
+        except (np.linalg.LinAlgError, ValueError):
+            log_evidence = np.nan
+        
+        # M-step: Compute eigenvalues for gamma calculation
+        # gamma = sum_i (lambda_i / (alpha + lambda_i))
+        # where lambda_i are eigenvalues of beta * Phi^T * Phi
+        eigvals = np.linalg.eigvalsh(beta * PhiT_Phi)
+        gamma = np.sum(eigvals / (alpha + eigvals))
+        
+        # Ensure gamma is in valid range [0, M]
+        gamma = np.clip(gamma, 1e-10, M)
+        
+        # Update alpha using re-estimation equation (Bishop 3.92)
+        # alpha_new = gamma / (m_N^T * m_N)
+        if m_N_norm_sq > 1e-10:
+            alpha_new = gamma / m_N_norm_sq
+        else:
+            alpha_new = alpha_old
+        
+        # Update beta using re-estimation equation (Bishop 3.95)
+        # beta_new = (N - gamma) / ||t - Phi*m_N||^2
+        if residual_sum_sq > 1e-10:
+            beta_new = (N - gamma) / residual_sum_sq
+        else:
+            beta_new = beta_old
+        
+        # NO DAMPING - use direct update for faster convergence
+        alpha = alpha_new
+        beta = beta_new
+        
+        # Prevent numerical issues
+        alpha = np.clip(alpha, 1e-10, 1e10)
+        beta = np.clip(beta, 1e-10, 1e10)
+        
+        # Compute changes for convergence check
+        delta_alpha = abs(alpha - alpha_old) / (abs(alpha_old) + 1e-10)
+        delta_beta = abs(beta - beta_old) / (abs(beta_old) + 1e-10)
+        
+        # Store history
+        history.append((iteration + 1, alpha, beta, gamma, log_evidence, delta_alpha, delta_beta))
+        
+        # Print progress
+        if (iteration + 1) % 5 == 0 or iteration == 0:
+            print(f"Iter {iteration+1:3d}: α={alpha:8.4f}, β={beta:8.6f}, γ={gamma:5.2f}, Evidence={log_evidence:12.2f}")
+        
+        # Check convergence
+        if delta_alpha < tol and delta_beta < tol and iteration > 10:
+            print(f"Converged at iteration {iteration+1}")
+            break
+    
+    return alpha, beta, m_N, S_N, history
+
+
+def cv_bayesian_hyperparams(
+    Phi_train: np.ndarray,
+    t_train: np.ndarray,
+    alpha_grid: np.ndarray,
+    beta_grid: np.ndarray,
+    k_folds: int = 5
+) -> tuple[float, float, list]:
+    # Create time-series CV folds
+    folds = time_series_cv_indices(len(t_train), k=k_folds)
+    
+    best_alpha = None
+    best_beta = None
+    best_cv_score = float('inf')
+    cv_results = []
+    
+    # Grid search
+    for alpha in alpha_grid:
+        for beta in beta_grid:
+            fold_scores = []
+            
+            for train_idx, val_idx in folds:
+                Phi_fold_train = Phi_train[train_idx]
+                t_fold_train = t_train[train_idx]
+                Phi_fold_val = Phi_train[val_idx]
+                t_fold_val = t_train[val_idx]
+                
+                # Compute posterior with current alpha, beta
+                m_N_fold, S_N_fold = compute_posterior(
+                    Phi_fold_train, t_fold_train, alpha, beta
+                )
+                
+                # Predict on validation fold
+                pred_fold = Phi_fold_val @ m_N_fold
+                mse_fold = np.mean((t_fold_val - pred_fold) ** 2)
+                fold_scores.append(mse_fold)
+            
+            # Average CV score
+            avg_cv_score = np.mean(fold_scores)
+            cv_results.append((alpha, beta, avg_cv_score))
+            
+            if avg_cv_score < best_cv_score:
+                best_cv_score = avg_cv_score
+                best_alpha = alpha
+                best_beta = beta
+    
+    return best_alpha, best_beta, cv_results
+
