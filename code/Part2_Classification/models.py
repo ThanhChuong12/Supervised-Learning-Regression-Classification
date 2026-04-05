@@ -3,6 +3,8 @@ import time
 import pandas as pd
 from typing import List, Tuple, Optional, Type, Dict
 from scipy.stats import norm
+from typing import List, Tuple, Optional, Type
+from scipy.stats import chi2 as _chi2
 
 class Perceptron:
     """
@@ -1015,4 +1017,5 @@ class GaussianNaiveBayes:
 #                 discriminants.append(d_k)
 #             y_pred.append(self.classes[np.argmax(discriminants)])
 #         return np.array(y_pred)
+
 

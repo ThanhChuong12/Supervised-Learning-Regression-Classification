@@ -8,6 +8,9 @@ import seaborn as sns
 from typing import Tuple, Optional, List
 from sklearn.decomposition import PCA
 
+from typing import Tuple
+from sklearn.calibration import calibration_curve
+import matplotlib.gridspec as gridspec
 
 def plot_convergence_comparison(
     gd_model, 
@@ -627,4 +630,77 @@ def plot_decision_boundary_comparison(X, y, model_linear, model_kernel, title_li
     fig.colorbar(contour2, cax=cbar_ax, label='Predicted Probability (Class 1)')
 
     plt.subplots_adjust(right=0.9)
+    plt.show()
+
+def plot_reliability_diagram(
+    y_true: np.ndarray,
+    y_prob: np.ndarray,
+    n_bins: int = 10,
+    model_name: str = "Model",
+    title: str = "Reliability Diagram",
+    figsize: Tuple[int, int] = (10, 8),
+    dpi: int = 120
+) -> None:
+    """
+    Plot the Reliability Diagram along with a histogram of predicted probabilities
+    to analyze the calibration of output probabilities.
+    
+    Parameters:
+    -----------
+    y_true : 1D array-like
+        True binary labels.
+    y_prob : 1D array-like
+        Predicted probabilities for the positive class.
+    n_bins : int
+        Number of bins for calibration curve.
+    model_name : str
+        Name of the model for the legend.
+    title : str
+        Title of the plot.
+    figsize : tuple
+        Size of the figure.
+    dpi : int
+        DPI of the figure.
+    """
+    fraction_of_positives, mean_predicted_value = calibration_curve(
+        y_true, y_prob, n_bins=n_bins, strategy='uniform'
+    )
+
+    fig = plt.figure(figsize=figsize, dpi=dpi)
+    gs = gridspec.GridSpec(4, 1, hspace=0.4)
+    
+    # Top plot: Calibration Curve
+    ax1 = fig.add_subplot(gs[:3, 0])
+    ax1.plot([0, 1], [0, 1], "k:", label="Perfectly calibrated")
+    ax1.plot(mean_predicted_value, fraction_of_positives, "s-",
+             label=model_name, color="#D55E00", linewidth=2.5, markersize=8)
+    
+    ax1.set_ylabel("Fraction of positives", fontsize=12, fontweight="bold")
+    ax1.set_ylim([-0.05, 1.05])
+    ax1.set_xlim([-0.05, 1.05])
+    ax1.set_title(title, fontsize=15, fontweight="bold", pad=15)
+    ax1.legend(loc="lower right", fontsize=11, frameon=True, facecolor="white", framealpha=0.9)
+    ax1.grid(True, linestyle="--", alpha=0.4)
+    
+    for spine in ["top", "right"]:
+        ax1.spines[spine].set_visible(False)
+    ax1.spines["bottom"].set_color("dimgray")
+    ax1.spines["left"].set_color("dimgray")
+    
+    # Bottom plot: Histogram of predicted probabilities
+    ax2 = fig.add_subplot(gs[3, 0])
+    ax2.hist(y_prob, range=(0, 1), bins=n_bins, label=model_name,
+             histtype="bar", lw=2, color="#0072B2", edgecolor="black", alpha=0.7)
+    ax2.set_xlabel("Mean predicted probability", fontsize=12, fontweight="bold")
+    ax2.set_ylabel("Count", fontsize=12, fontweight="bold")
+    ax2.set_xlim([-0.05, 1.05])
+    ax2.legend(loc="upper right", fontsize=10, frameon=True, facecolor="white", framealpha=0.9)
+    ax2.grid(True, linestyle="--", alpha=0.4, axis="y")
+    
+    for spine in ["top", "right"]:
+        ax2.spines[spine].set_visible(False)
+    ax2.spines["bottom"].set_color("dimgray")
+    ax2.spines["left"].set_color("dimgray")
+
+    plt.tight_layout()
     plt.show()
