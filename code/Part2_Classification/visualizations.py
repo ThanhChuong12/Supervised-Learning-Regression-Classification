@@ -650,12 +650,12 @@ def plot_bayesian_decision_boundary_with_uncertainty(
 
     # Scatter plot of data points
     plt.scatter(
-        X_2d[y == 0, 0], X_2d[y == 0, 1],
-        edgecolor='k', s=40, alpha=0.5, label='Class 0'
+        X_2d[y == 0, 0], X_2d[y == 0, 1], c='#00897b',
+        edgecolor='k', s=40, alpha=0.5, label='Empty Room (0)'
     )
     plt.scatter(
-        X_2d[y == 1, 0], X_2d[y == 1, 1],
-        edgecolor='k', s=40, alpha=0.5, label='Class 1'
+        X_2d[y == 1, 0], X_2d[y == 1, 1], c='#fb8c00',
+        edgecolor='k', s=40, alpha=0.5, label='Occupied (1)'
     )
 
     # Decision boundary (mu = 0)
@@ -670,6 +670,7 @@ def plot_bayesian_decision_boundary_with_uncertainty(
     plt.contour(
         xx, yy, mu_map + mag_factor * sigma_map,
         levels=[0],
+        colors='red',
         linewidths=2.0,
         linestyles='dashed'
     )
@@ -677,20 +678,23 @@ def plot_bayesian_decision_boundary_with_uncertainty(
     plt.contour(
         xx, yy, mu_map - mag_factor * sigma_map,
         levels=[0],
+        colors='blue',
         linewidths=2.0,
         linestyles='dashed'
     )
 
     # Custom legend
     legend_elements = [
-        mlines.Line2D([], [], marker='o', color='w', markerfacecolor='gray',
-                      markersize=8, alpha=0.5, label='Class 0'),
-        mlines.Line2D([], [], marker='o', color='w', markerfacecolor='lightgray',
-                      markersize=8, alpha=0.5, label='Class 1'),
+        mlines.Line2D([], [], marker='o', color='w', markerfacecolor='#00897b',
+                      markersize=8, alpha=0.5, label='Empty Room (0)'),
+        mlines.Line2D([], [], marker='o', color='w', markerfacecolor='#fb8c00',
+                      markersize=8, alpha=0.5, label='Occupied (1)'),
         mlines.Line2D([], [], color='black', lw=3.0,
                       label='Decision Boundary ($\\mu_a = 0$)'),
-        mlines.Line2D([], [], linestyle='--', lw=2.0,
-                      label=f'Uncertainty Band ($\\pm {mag_factor}\\sigma_a$)')
+        mlines.Line2D([], [], color='red', lw=2.0, linestyle='--',
+                  label=f'Upper Boundary ($\\mu_a + {mag_factor}\\sigma_a = 0$)'),
+        mlines.Line2D([], [], color='blue', lw=2.0, linestyle='--',
+                  label=f'Lower Boundary ($\\mu_a - {mag_factor}\\sigma_a = 0$)')
     ]
 
     plt.legend(handles=legend_elements, loc='upper left', framealpha=0.95)
