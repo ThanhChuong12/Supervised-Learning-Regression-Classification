@@ -5,7 +5,9 @@ import matplotlib.colors as mcolors
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
 import seaborn as sns
-from typing import Tuple
+from typing import Tuple, Optional, List
+from sklearn.decomposition import PCA
+
 
 def plot_convergence_comparison(
     gd_model, 
@@ -305,6 +307,277 @@ def plot_lda_qda_decision_analysis(
     plt.tight_layout()
     plt.show()
 
+# =====================================================================
+# ADVANCED & BONUS MODELS
+# =====================================================================
+
+# Probability distribution comparison: Logistic vs Probit
+def plot_probability_density_comparison(
+    proba_logit: np.ndarray,
+    proba_probit: np.ndarray,
+    title: str = "Predicted Probability Distribution: Logistic vs Probit",
+    figsize: Tuple[int, int] = (12, 6),
+    dpi: int = 120,
+    save_path: Optional[str] = None,
+) -> None:
+    """
+    Plot KDE (Kernel Density Estimation) of predicted probabilities
+    for Logistic and Probit regression models.
+    """
+
+    proba_logit = np.asarray(proba_logit).ravel()
+    proba_probit = np.asarray(proba_probit).ravel()
+    if proba_logit.shape != proba_probit.shape:
+        raise ValueError("Input arrays must have the same shape.")
+
+    plt.figure(figsize=figsize, dpi=dpi)
+
+    # KDE plots
+    sns.kdeplot(
+        proba_logit,
+        fill=True,
+        linewidth=2,
+        label="Logistic Regression (Sigmoid)",
+        color="#1f77b4",
+        alpha=0.5,
+    )
+
+    sns.kdeplot(
+        proba_probit,
+        fill=True,
+        linewidth=2,
+        label="Probit Regression (Normal CDF)",
+        color="#d62728",
+        alpha=0.5,
+    )
+
+    plt.title(title, fontsize=15, fontweight="bold", pad=15)
+    plt.xlabel(
+        r"Predicted Probability $P(Y=1 \mid \mathbf{x})$",
+        fontsize=12,
+        fontweight="bold",
+    )
+    plt.ylabel(
+        "Density",
+        fontsize=12,
+        fontweight="bold",
+    )
+
+    # Probability range
+    plt.xlim(-0.05, 1.05)
+    plt.xticks(np.arange(0, 1.1, 0.1))
+    plt.legend(loc="upper center", fontsize=11, framealpha=0.9)
+    plt.grid(True, linestyle="--", alpha=0.5)
+
+    if save_path is not None:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.tight_layout()
+    plt.show()
+
+def compare_model_probability_distributions(
+    logit_model,
+    probit_model,
+    X: np.ndarray,
+    **kwargs,
+) -> None:
+    """
+    Convenience wrapper to directly compare probability distributions
+    from trained Logistic and Probit models.
+    """
+    proba_logit = logit_model.predict_proba(X)
+    proba_probit = probit_model.predict_proba(X)
+
+    plot_probability_density_comparison(
+        proba_logit,
+        proba_probit,
+        **kwargs,
+    )
+
+# Logistic vs Probit Decision Boundary Comparison in PCA Space
+def plot_logit_vs_probit_pca_boundary(
+    X: np.ndarray,
+    y: np.ndarray,
+    logit_model_cls,
+    probit_model_cls,
+    title: str = "Decision Boundary Analysis: Logistic vs Probit (PCA Projection)",
+    grid_resolution: int = 400,
+    figsize: Tuple[int, int] = (14, 9),
+    dpi: int = 120,
+    save_path: Optional[str] = None,
+) -> None:
+    """
+    Visualize and compare Logistic vs Probit decision boundaries
+    in a 2D PCA-projected feature space.
+
+    This function:
+    - Reduces data to 2D using PCA
+    - Trains Logistic and Probit models in PCA space
+    - Plots:
+        + Data distribution (faded background)
+        + Decision boundaries (P = 0.5)
+        + Confidence margins (P = 0.1 and P = 0.9)
+    """
+
+    # PCA projection (2D)
+    pca = PCA(n_components=2, random_state=42)
+    X_pca = pca.fit_transform(X)
+
+    logit_2d = logit_model_cls().fit(X_pca, y)
+    probit_2d = probit_model_cls().fit(X_pca, y)
+    x_min, x_max = X_pca[:, 0].min() - 1, X_pca[:, 0].max() + 1
+    y_min, y_max = X_pca[:, 1].min() - 1, X_pca[:, 1].max() + 1
+
+    xx, yy = np.meshgrid(
+        np.linspace(x_min, x_max, grid_resolution),
+        np.linspace(y_min, y_max, grid_resolution),
+    )
+    grid = np.c_[xx.ravel(), yy.ravel()]
+    probas_logit = logit_2d.predict_proba(grid).reshape(xx.shape)
+    probas_probit = probit_2d.predict_proba(grid).reshape(xx.shape)
+
+    plt.figure(figsize=figsize, dpi=dpi)
+    cmap_points = mcolors.ListedColormap(["#00897b", "#fb8c00"])
+
+    # Background scatter (faded)
+    plt.scatter(
+        X_pca[:, 0],
+        X_pca[:, 1],
+        c=y,
+        cmap=cmap_points,
+        edgecolors="k",
+        s=35,
+        alpha=0.25,
+    )
+
+    # Logistic decision boundary
+    plt.contour(
+        xx,
+        yy,
+        probas_logit,
+        levels=[0.5],
+        colors="blue",
+        linewidths=3.0,
+        linestyles="-",
+    )
+    contour_logit = plt.contour(
+        xx,
+        yy,
+        probas_logit,
+        levels=[0.1, 0.9],
+        colors="blue",
+        linewidths=1.2,
+        linestyles=":",
+        alpha=0.7,
+    )
+    plt.clabel(contour_logit, inline=True, fontsize=9, fmt="P=%.1f")
+
+    # Probit decision boundary
+    plt.contour(
+        xx,
+        yy,
+        probas_probit,
+        levels=[0.5],
+        colors="red",
+        linewidths=3.0,
+        linestyles="--",
+    )
+
+    contour_probit = plt.contour(
+        xx,
+        yy,
+        probas_probit,
+        levels=[0.1, 0.9],
+        colors="red",
+        linewidths=1.2,
+        linestyles=":",
+        alpha=0.7,
+    )
+    plt.clabel(contour_probit, inline=True, fontsize=9, fmt="P=%.1f")
+
+    # Labels & styling
+    plt.title(title, fontsize=16, fontweight="bold", pad=20)
+    plt.xlabel("Principal Component 1 (PC1)", fontsize=12, fontweight="bold")
+    plt.ylabel("Principal Component 2 (PC2)", fontsize=12, fontweight="bold")
+    legend_elements = [
+        mlines.Line2D(
+            [0], [0],
+            marker="o",
+            color="w",
+            markerfacecolor="#00897b",
+            markersize=10,
+            alpha=0.5,
+            label="Class 0",
+        ),
+        mlines.Line2D(
+            [0], [0],
+            marker="o",
+            color="w",
+            markerfacecolor="#fb8c00",
+            markersize=10,
+            alpha=0.5,
+            label="Class 1",
+        ),
+        mlines.Line2D([0], [0], color="none", label="--- Decision Boundary (P=0.5) ---"),
+        mlines.Line2D([0], [0], color="blue", lw=3, linestyle="-", label="Logistic"),
+        mlines.Line2D([0], [0], color="red", lw=3, linestyle="--", label="Probit"),
+        mlines.Line2D([0], [0], color="none", label="--- Confidence Margins ---"),
+        mlines.Line2D([0], [0], color="blue", lw=1.2, linestyle=":", label="Logistic (0.1 / 0.9)"),
+        mlines.Line2D([0], [0], color="red", lw=1.2, linestyle=":", label="Probit (0.1 / 0.9)"),
+    ]
+
+    plt.legend(
+        handles=legend_elements,
+        loc="best",
+        framealpha=0.95,
+        fontsize=10,
+        edgecolor="gray",
+    )
+    plt.grid(True, linestyle="--", alpha=0.4)
+    if save_path is not None:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.tight_layout()
+    plt.show()
+
+def plot_noise_robustness(
+    noise_rates: List[float],
+    acc_logit: List[float],
+    acc_probit: List[float],
+    title: str = "Performance Degradation Under Label Noise"
+) -> None:
+    """
+    Plot performance degradation curves for models.
+    """
+
+    plt.figure(figsize=(10, 6), dpi=120)
+    plt.plot(
+        noise_rates,
+        acc_logit,
+        marker='o',
+        markersize=7,
+        linewidth=2.2,
+        label='Logistic Regression',
+    )
+    plt.plot(
+        noise_rates,
+        acc_probit,
+        marker='s',
+        markersize=7,
+        linewidth=2.2,
+        linestyle='--',
+        label='Probit Regression',
+    )
+    plt.title(title, fontsize=14, fontweight='bold', pad=12)
+    plt.xlabel("Noise Rate (Proportion of Flipped Labels)", fontsize=11)
+    plt.ylabel("Test Accuracy", fontsize=11)
+    plt.xticks(noise_rates, [f"{int(n * 100)}%" for n in noise_rates])
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.legend(framealpha=0.9)
+
+    ax = plt.gca()
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    plt.tight_layout()
+    plt.show()
 
 def plot_decision_boundary_comparison(X, y, model_linear, model_kernel, title_lin, title_ker):
     """

@@ -1,7 +1,8 @@
 import numpy as np
 import time
 import pandas as pd
-from typing import List, Tuple, Optional, Type
+from typing import List, Tuple, Optional, Type, Dict
+from scipy.stats import norm
 
 class Perceptron:
     """
@@ -635,6 +636,229 @@ class QuadraticDiscriminantAnalysis(BaseDiscriminantAnalysis):
 # =====================================================================
 # ADVANCED & BONUS MODELS: KERNEL LOGISTIC REGRESSION, GNB, AND LDA
 # =====================================================================
+
+# Binary Probit Regression
+class ProbitRegression:
+    """
+    Binary Probit Regression optimized via fully vectorized Gradient Descent.
+
+    Model assumption:
+        P(y = 1 | x) = Φ(w^T x)
+
+    where Φ is the CDF of the standard normal distribution.
+    """
+
+    def __init__(
+        self,
+        learning_rate: float = 0.01,
+        max_iter: int = 1000,
+        tol: float = 1e-6,
+        fit_intercept: bool = True,
+        verbose: bool = False,
+        eps: float = 1e-8,
+    ) -> None:
+        self.lr = learning_rate
+        self.max_iter = max_iter
+        self.tol = tol
+        self.fit_intercept = fit_intercept
+        self.verbose = verbose
+        self.eps = eps
+
+        self.w: Optional[np.ndarray] = None
+        self.loss_history: List[float] = []
+        self.time_history: List[float] = []
+
+    def _add_intercept(self, X: np.ndarray) -> np.ndarray:
+        """
+        Add intercept (bias term) to input matrix.
+        """
+        if self.fit_intercept:
+            return np.c_[np.ones(X.shape[0]), X]
+        return X
+
+    @staticmethod
+    def _cdf(z: np.ndarray) -> np.ndarray:
+        """Standard Normal CDF Φ(z)."""
+        return norm.cdf(z)
+
+    @staticmethod
+    def _pdf(z: np.ndarray) -> np.ndarray:
+        """Standard Normal PDF φ(z)."""
+        return norm.pdf(z)
+
+    def _compute_loss(self, y: np.ndarray, z: np.ndarray) -> float:
+        """
+        Compute negative log-likelihood (binary cross-entropy form).
+        """
+        p = np.clip(self._cdf(z), self.eps, 1.0 - self.eps)
+        loss = -np.mean(
+            y * np.log(p) + (1.0 - y) * np.log(1.0 - p)
+        )
+        return float(loss)
+
+    def _gradient(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        z: np.ndarray
+    ) -> np.ndarray:
+        """
+        Compute gradient of negative log-likelihood (vectorized).
+        """
+        n_samples = X.shape[0]
+
+        phi_z = self._pdf(z)
+        Phi_z = np.clip(self._cdf(z), self.eps, 1.0 - self.eps)
+
+        # Derivative of loss w.r.t z
+        factor = (
+            -(y * phi_z / Phi_z)
+            + ((1.0 - y) * phi_z / (1.0 - Phi_z))
+        )
+        grad = (X.T @ factor) / n_samples
+        return grad
+    
+    def fit(self, X: np.ndarray, y: np.ndarray) -> "ProbitRegression":
+        """
+        Train the Probit Regression model using Gradient Descent.
+        """
+        X_aug = self._add_intercept(X)
+        n_samples, n_features = X_aug.shape
+
+        # Initialize weights
+        self.w = np.zeros(n_features)
+        self.loss_history = []
+        self.time_history = []
+
+        start_time = time.time()
+
+        for i in range(self.max_iter):
+            z = X_aug @ self.w
+            loss = self._compute_loss(y, z)
+
+            self.loss_history.append(loss)
+            self.time_history.append(time.time() - start_time)
+
+            # Convergence check
+            if i > 0:
+                if abs(self.loss_history[-2] - loss) < self.tol:
+                    if self.verbose:
+                        print(f"[Probit] Converged at iteration {i}")
+                    break
+
+            # Gradient update
+            grad = self._gradient(X_aug, y, z)
+            self.w -= self.lr * grad
+
+        if self.verbose and len(self.loss_history) == self.max_iter:
+            print(f"[Probit] Stopped at max_iter={self.max_iter} (no full convergence)")
+
+        return self
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        """
+        Predict probability P(y = 1 | X).
+        """
+        if self.w is None:
+            raise ValueError("Model must be fitted before calling predict_proba().")
+
+        X_aug = self._add_intercept(X)
+        z = X_aug @ self.w
+        return self._cdf(z)
+
+    def predict(self, X: np.ndarray, threshold: float = 0.5) -> np.ndarray:
+        prob = self.predict_proba(X)
+        return (prob >= threshold).astype(int)
+
+"""
+Noise Robustness Evaluation Module
+
+This module provides utilities to:
+- Inject label noise into training data
+- Evaluate model robustness under different noise levels
+"""
+def inject_label_noise(
+    y: np.ndarray,
+    noise_rate: float,
+    random_state: int = 42
+) -> np.ndarray:
+    """
+    Inject symmetric label noise by flipping a proportion of labels.
+    """
+    if not (0.0 <= noise_rate <= 1.0):
+        raise ValueError("noise_rate must be between 0 and 1.")
+    rng = np.random.default_rng(random_state)
+    y_noisy = y.copy()
+    n_samples = len(y_noisy)
+    n_flips = int(noise_rate * n_samples)
+
+    if n_flips == 0:
+        return y_noisy
+
+    flip_indices = rng.choice(n_samples, n_flips, replace=False)
+    y_noisy[flip_indices] = 1 - y_noisy[flip_indices]
+
+    return y_noisy
+
+def compute_accuracy(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    """
+    Compute classification accuracy.
+    """
+    return np.mean(y_true == y_pred)
+
+def evaluate_noise_robustness(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_test: np.ndarray,
+    y_test: np.ndarray,
+    noise_rates: List[float],
+    logistic_model_cls,
+    probit_model_cls,
+    logistic_params: Dict = None,
+    probit_params: Dict = None,
+    random_state: int = 42,
+    verbose: bool = True
+) -> Tuple[List[float], List[float]]:
+    """
+    Evaluate model performance under increasing label noise.
+    """
+
+    logistic_params = logistic_params or {}
+    probit_params = probit_params or {}
+    acc_logit = []
+    acc_probit = []
+
+    if verbose:
+        print("Starting noise robustness evaluation...\n")
+
+    for noise in noise_rates:
+        if verbose:
+            print(f"[INFO] Noise level: {int(noise * 100):02d}%")
+
+        # Inject noise
+        y_train_noisy = inject_label_noise(
+            y_train,
+            noise_rate=noise,
+            random_state=random_state
+        )
+
+        # Train Logistic Regression
+        logit_model = logistic_model_cls(**logistic_params)
+        logit_model.fit(X_train, y_train_noisy)
+        y_pred_logit = logit_model.predict(X_test)
+        acc_logit.append(compute_accuracy(y_test, y_pred_logit))
+
+        # Train Probit Regression
+        probit_model = probit_model_cls(**probit_params)
+        probit_model.fit(X_train, y_train_noisy)
+        y_pred_probit = probit_model.predict(X_test)
+        acc_probit.append(compute_accuracy(y_test, y_pred_probit))
+
+    if verbose:
+        print("\nEvaluation completed.")
+
+    return acc_logit, acc_probit
+
 
 def rbf_kernel(X1, X2, gamma=1.0):
     """
