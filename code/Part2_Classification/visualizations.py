@@ -8,7 +8,7 @@ import seaborn as sns
 from typing import Tuple, Optional, List
 from sklearn.decomposition import PCA
 
-from typing import Tuple
+from typing import Tuple, List, Optional
 from sklearn.calibration import calibration_curve
 import matplotlib.gridspec as gridspec
 
@@ -579,6 +579,129 @@ def plot_noise_robustness(
     ax = plt.gca()
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
+    plt.tight_layout()
+    plt.show()
+
+def plot_covariance_heatmap(
+    sigma: np.ndarray,
+    feature_names: List[str],
+    subset_size: int = 15,
+    title: str = "Posterior Covariance Matrix",
+    figsize: tuple = (10, 8),
+    cmap: str = "coolwarm"
+) -> None:
+    """
+    Plot a heatmap of the posterior covariance matrix (subset).
+    """
+
+    if sigma is None:
+        raise ValueError("Sigma (covariance matrix) must not be None.")
+
+    if subset_size > sigma.shape[0]:
+        raise ValueError("subset_size cannot exceed matrix dimensions.")
+
+    # Extract submatrix
+    sigma_subset = sigma[:subset_size, :subset_size]
+
+    # Construct labels (bias + feature names)
+    labels = ["Bias (w0)"] + feature_names[: subset_size - 1]
+
+    # Plot
+    plt.figure(figsize=figsize)
+    ax = sns.heatmap(
+        sigma_subset,
+        annot=False,
+        cmap=cmap,
+        center=0,
+        square=True,
+        linewidths=0.5,
+        cbar_kws={"label": "Variance / Covariance"},
+    )
+
+    # Align ticks to cell centers
+    ax.set_xticks(np.arange(len(labels)) + 0.5)
+    ax.set_yticks(np.arange(len(labels)) + 0.5)
+
+    # Format labels
+    ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=10)
+    ax.set_yticklabels(labels, rotation=0, fontsize=10)
+
+    plt.title(title, fontsize=14, fontweight="bold", pad=12)
+
+    plt.tight_layout()
+    plt.show()
+
+def plot_bayesian_decision_boundary_with_uncertainty(
+    X_2d: np.ndarray,
+    y: np.ndarray,
+    xx: np.ndarray,
+    yy: np.ndarray,
+    mu_map: np.ndarray,
+    sigma_map: np.ndarray,
+    mag_factor: float = 2.0,
+) -> None:
+    """
+    Visualize Bayesian Logistic Regression decision boundary with uncertainty bands.
+        - X_2d: 2D PCA-projected data points
+        - y: class labels
+    """
+
+    plt.figure(figsize=(12, 8), dpi=120)
+
+    # Scatter plot of data points
+    plt.scatter(
+        X_2d[y == 0, 0], X_2d[y == 0, 1],
+        edgecolor='k', s=40, alpha=0.5, label='Class 0'
+    )
+    plt.scatter(
+        X_2d[y == 1, 0], X_2d[y == 1, 1],
+        edgecolor='k', s=40, alpha=0.5, label='Class 1'
+    )
+
+    # Decision boundary (mu = 0)
+    plt.contour(
+        xx, yy, mu_map,
+        levels=[0],
+        linewidths=3.0,
+        linestyles='solid'
+    )
+
+    # Uncertainty bands
+    plt.contour(
+        xx, yy, mu_map + mag_factor * sigma_map,
+        levels=[0],
+        linewidths=2.0,
+        linestyles='dashed'
+    )
+
+    plt.contour(
+        xx, yy, mu_map - mag_factor * sigma_map,
+        levels=[0],
+        linewidths=2.0,
+        linestyles='dashed'
+    )
+
+    # Custom legend
+    legend_elements = [
+        mlines.Line2D([], [], marker='o', color='w', markerfacecolor='gray',
+                      markersize=8, alpha=0.5, label='Class 0'),
+        mlines.Line2D([], [], marker='o', color='w', markerfacecolor='lightgray',
+                      markersize=8, alpha=0.5, label='Class 1'),
+        mlines.Line2D([], [], color='black', lw=3.0,
+                      label='Decision Boundary ($\\mu_a = 0$)'),
+        mlines.Line2D([], [], linestyle='--', lw=2.0,
+                      label=f'Uncertainty Band ($\\pm {mag_factor}\\sigma_a$)')
+    ]
+
+    plt.legend(handles=legend_elements, loc='upper left', framealpha=0.95)
+    plt.xlabel('Principal Component 1 (PC1)', fontweight='bold')
+    plt.ylabel('Principal Component 2 (PC2)', fontweight='bold')
+    plt.title(
+        f'Bayesian Logistic Regression\nDecision Boundary with Uncertainty ({mag_factor}x)',
+        fontsize=14,
+        fontweight='bold'
+    )
+    plt.grid(True, linestyle='--', alpha=0.4)
     plt.tight_layout()
     plt.show()
 

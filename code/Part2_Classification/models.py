@@ -5,6 +5,7 @@ from typing import List, Tuple, Optional, Type, Dict
 from scipy.stats import norm
 from typing import List, Tuple, Optional, Type
 from scipy.stats import chi2 as _chi2
+from scipy.linalg import inv, solve
 
 class Perceptron:
     """
@@ -861,6 +862,155 @@ def evaluate_noise_robustness(
 
     return acc_logit, acc_probit
 
+
+"""
+Bayesian Logistic Regression (Laplace Approximation)
+"""
+# NOTE:
+# Assumes BinaryLogisticRegression base class provides:
+# - _add_intercept(X)
+# - _sigmoid(z)
+# - _compute_loss(y, z)
+# - attributes: lr, max_iter, tol, method, fit_intercept, verbose
+
+class BayesianLogisticRegression(BinaryLogisticRegression):
+    """
+    Bayesian Logistic Regression using Laplace Approximation.
+
+    This class extends standard Logistic Regression by:
+    1. Estimating MAP parameters with L2 prior
+    2. Approximating posterior with Gaussian (Laplace)
+    3. Providing predictive uncertainty
+
+    Parameters
+    ----------
+    lambda_reg : float, default=1.0
+        L2 regularization strength (inverse prior variance).
+    """
+
+    def __init__(self, lambda_reg: float = 1.0, **kwargs):
+        super().__init__(**kwargs)
+        self.lambda_reg = lambda_reg
+
+        # Posterior-related attributes
+        self.Sigma: Optional[np.ndarray] = None   # Posterior covariance
+        self.A: Optional[np.ndarray] = None       # Hessian at MAP
+        self.reg_mask: Optional[np.ndarray] = None
+
+    # Training (MAP Estimation)
+    def fit(self, X: np.ndarray, y: np.ndarray):
+        X_aug = self._add_intercept(X)
+        N, d = X_aug.shape
+        self.w = np.zeros(d)
+        self.loss_history = []
+        self.time_history = []
+        start_time = time.time()
+
+        # Do not regularize bias term
+        self.reg_mask = np.ones(d)
+        if self.fit_intercept:
+            self.reg_mask[0] = 0.0
+
+        for i in range(self.max_iter):
+            z = X_aug @ self.w
+            y_pred = self._sigmoid(z)
+
+            # Loss (Negative Log-Likelihood + L2 prior)
+            base_loss = self._compute_loss(y, z)
+            reg_loss = 0.5 * self.lambda_reg * np.sum((self.w * self.reg_mask) ** 2)
+            loss = base_loss + reg_loss
+            self.loss_history.append(loss)
+            self.time_history.append(time.time() - start_time)
+
+            # Convergence check
+            if i > 0 and abs(self.loss_history[-2] - loss) < self.tol:
+                if self.verbose:
+                    print(f"[BayesianLogistic] Converged at iteration {i}")
+                break
+
+            # Gradient
+            gradient = (
+                (X_aug.T @ (y_pred - y)) / N
+                + self.lambda_reg * (self.w * self.reg_mask)
+            )
+
+            # Optimization step
+            if self.method == "gd":
+                self.w -= self.lr * gradient
+
+            elif self.method == "newton":
+                # Hessian
+                R = np.diag(y_pred * (1.0 - y_pred))
+                H = (
+                    (X_aug.T @ R @ X_aug) / N
+                    + self.lambda_reg * np.diag(self.reg_mask)
+                )
+
+                # More stable than inv(H) @ gradient
+                self.w -= solve(H, gradient)
+
+            else:
+                raise ValueError("method must be either 'gd' or 'newton'")
+
+        # Compute posterior after MAP
+        self._compute_posterior(X_aug, y, N)
+
+        return self
+
+    # Posterior Approximation
+    def _compute_posterior(self, X_aug: np.ndarray, y: np.ndarray, N: int):
+        """
+        Compute Laplace approximation of posterior:
+        - Hessian (A)
+        - Covariance (Sigma = A^{-1})
+        """
+        z = X_aug @ self.w
+        y_pred = self._sigmoid(z)
+        R = np.diag(y_pred * (1.0 - y_pred))
+        self.A = (X_aug.T @ R @ X_aug) + (N * self.lambda_reg) * np.diag(self.reg_mask)
+
+        # Inverse Hessian = covariance
+        self.Sigma = inv(self.A)
+
+    # Prediction with Uncertainty
+    def predict_proba_with_uncertainty(
+        self, X: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Predict probability with uncertainty estimation.
+
+        Uses Probit approximation to marginalize posterior.
+
+        Parameters
+        ----------
+        X : np.ndarray
+
+        Returns
+        -------
+        prob : np.ndarray
+            Predictive probabilities P(y=1 | x)
+        sigma_a : np.ndarray
+            Standard deviation of latent function (uncertainty)
+        """
+        if self.Sigma is None:
+            raise RuntimeError("Model must be fitted before prediction.")
+
+        X_aug = self._add_intercept(X)
+
+        # Mean of latent variable
+        mu_a = X_aug @ self.w
+
+        # Variance: diag(X Σ X^T)
+        sigma_a_sq = np.einsum("ij,ij->i", X_aug @ self.Sigma, X_aug)
+        sigma_a = np.sqrt(sigma_a_sq)
+
+        # Probit approximation scaling
+        kappa = 1.0 / np.sqrt(1.0 + (np.pi / 8.0) * sigma_a_sq)
+
+        # Final predictive probability
+        prob = self._sigmoid(kappa * mu_a)
+
+        return prob, sigma_a
 
 def rbf_kernel(X1, X2, gamma=1.0):
     """
