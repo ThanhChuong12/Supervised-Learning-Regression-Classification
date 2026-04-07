@@ -7,10 +7,14 @@ import matplotlib.lines as mlines
 import seaborn as sns
 from typing import Tuple, Optional, List
 from sklearn.decomposition import PCA
+from itertools import cycle
 
 from typing import Tuple, List, Optional
 from sklearn.calibration import calibration_curve
 import matplotlib.gridspec as gridspec
+from sklearn.metrics import confusion_matrix, roc_curve, precision_recall_curve, auc, average_precision_score
+from sklearn.preprocessing import label_binarize
+
 
 def plot_convergence_comparison(
     gd_model, 
@@ -309,6 +313,194 @@ def plot_lda_qda_decision_analysis(
         ax.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()
     plt.show()
+
+
+def plot_perceptron_ovo_convergence_curves(perceptron_ovo):
+    # Plot the convergence curve for each binary classifier using subplots
+    fig, axes = plt.subplots(2, 3, figsize=(16, 10))
+    axes = axes.flatten()
+
+    # Loop through each model to plot their specific error history on a separate subplot
+    for idx, estimator in enumerate(perceptron_ovo.estimators_):
+        errors = estimator.errors_history
+        c1, c2 = perceptron_ovo.class_pairs_[idx]
+        
+        axes[idx].plot(range(1, len(errors) + 1), errors, color='crimson', linewidth=1.5, alpha=0.9)
+        axes[idx].set_title(f'Class {c1} vs Class {c2}', fontsize=12, fontweight='bold')
+        axes[idx].set_xlabel('Epochs', fontsize=10)
+        axes[idx].set_ylabel('Misclassified Samples', fontsize=10)
+        axes[idx].axhline(y=0, color='black', linestyle='--', linewidth=1)
+
+    plt.suptitle('Perceptron Convergence Curves (OvO Strategy - 6 Pairs)', fontsize=16, fontweight='bold', y=1.02)
+    plt.tight_layout()
+    plt.show()
+
+def plot_multiclass_logistic_regression_ovr_diagnostics(best_lr_model, y_test, y_pred_test_lr):
+    # Visualizations: Loss Curve and Confusion Matrix
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+    # Plot the Loss Curve for each of the 4 internal models
+    for idx, estimator in enumerate(best_lr_model.estimators_):
+        axes[0].plot(range(1, len(estimator.loss_history) + 1), estimator.loss_history, 
+                     linewidth=2, label=f'Class {best_lr_model.classes_[idx]} vs Rest')
+
+    axes[0].set_title('Logistic Regression: Loss Curve (OvR)', fontsize=14, fontweight='bold')
+    axes[0].set_xlabel('Epochs', fontsize=12)
+    axes[0].set_ylabel('Weighted Cross-Entropy Loss', fontsize=12)
+    axes[0].legend()
+
+    # Plot the Confusion Matrix
+    cm = confusion_matrix(y_test, y_pred_test_lr)
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=axes[1], 
+                xticklabels=best_lr_model.classes_, 
+                yticklabels=best_lr_model.classes_,
+                annot_kws={"size": 14, "weight": "bold"})
+    axes[1].set_title('Confusion Matrix on Test Set', fontsize=14, fontweight='bold')
+    axes[1].set_xlabel('Predicted Label', fontsize=12)
+    axes[1].set_ylabel('True Label', fontsize=12)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_models_confusion_matrices_grid(models_dict, X_test, y_test, classes):
+    """
+    Visualizes the Confusion Matrix for each evaluated model using Seaborn heatmaps.
+    """
+    n_models = len(models_dict)
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+    axes = axes.flatten()
+    
+    for idx, (name, model) in enumerate(models_dict.items()):
+        y_pred = model.predict(X_test)
+        cm = confusion_matrix(y_test, y_pred)
+        
+        # Plot Heatmap
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=axes[idx],
+                    xticklabels=classes, yticklabels=classes,
+                    annot_kws={"size": 13, "weight": "bold"})
+        
+        axes[idx].set_title(name, fontsize=13, fontweight='bold', pad=10)
+        axes[idx].set_xlabel('Predicted Label', fontsize=11)
+        axes[idx].set_ylabel('True Label', fontsize=11)
+        
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_logistic_regression_ovr_loss_convergence_curve(ovr):
+    plt.figure(figsize=(10, 6))
+
+    # Extract the estimators from the Baseline OvR model (custom implementation)
+    # We use the baseline model here as it purely shows the optimization trajectory without penalties
+    for idx, estimator in enumerate(ovr.estimators_):
+        # Retrieve the loss history recorded during Gradient Descent / IRLS optimization
+        if hasattr(estimator, 'loss_history') and len(estimator.loss_history) > 0:
+            plt.plot(range(1, len(estimator.loss_history) + 1), estimator.loss_history, 
+                     linewidth=2, label=f'Class {idx} vs Rest')
+
+    plt.title('Loss Convergence Curve - Binary Logistic Regression (OvR Base)', fontsize=14, fontweight='bold', pad=15)
+    plt.xlabel('Optimization Epochs / Iterations', fontsize=12)
+    plt.ylabel('Log-Loss (Cross-Entropy)', fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.legend(loc='upper right', fontsize=11)
+    plt.tight_layout()
+    plt.show()
+
+def plot_multiclass_roc_pr_curves(models_dict, X_test, y_test, n_classes, class_labels):
+    """
+    Plots Multi-class ROC and Precision-Recall curves using the One-vs-Rest strategy.
+    Only evaluates models that support predict_proba().
+    """
+    # Binarize the output labels for OvR evaluation
+    y_test_bin = label_binarize(y_test, classes=range(n_classes))
+    colors = cycle(['navy', 'turquoise', 'darkorange', 'cornflowerblue'])
+    
+    # Filter out models that do not support probability estimation (e.g., Perceptron)
+    prob_models = {name: model for name, model in models_dict.items() if hasattr(model, 'predict_proba')}
+    n_prob_models = len(prob_models)
+    
+    if n_prob_models == 0:
+        print("No models support predict_proba. Cannot plot ROC/PR curves.")
+        return
+
+    fig, axes = plt.subplots(n_prob_models, 2, figsize=(16, 6 * n_prob_models))
+    # Handle single model case
+    if n_prob_models == 1:
+        axes = np.array([axes])
+
+    for row_idx, (name, model) in enumerate(prob_models.items()):
+        # Predict probabilities
+        y_score = model.predict_proba(X_test)
+        
+        # --- 1. Compute and Plot ROC Curve ---
+        ax_roc = axes[row_idx, 0]
+        # Compute Macro-average ROC curve and ROC area
+        fpr, tpr, roc_auc = dict(), dict(), dict()
+        for i in range(n_classes):
+            fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], y_score[:, i])
+            roc_auc[i] = auc(fpr[i], tpr[i])
+            
+        all_fpr = np.unique(np.concatenate([fpr[i] for i in range(n_classes)]))
+        mean_tpr = np.zeros_like(all_fpr)
+        for i in range(n_classes):
+            mean_tpr += np.interp(all_fpr, fpr[i], tpr[i])
+        mean_tpr /= n_classes
+        
+        fpr["macro"] = all_fpr
+        tpr["macro"] = mean_tpr
+        roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
+        
+        # Plot macro average
+        ax_roc.plot(fpr["macro"], tpr["macro"],
+                 label=f'Macro-average ROC (area = {roc_auc["macro"]:.4f})',
+                 color='navy', linestyle=':', linewidth=4)
+        
+        # Plot individual class ROC
+        for i, color in zip(range(n_classes), colors):
+            ax_roc.plot(fpr[i], tpr[i], color=color, lw=2,
+                     label=f'ROC curve of class {class_labels[i]} (area = {roc_auc[i]:.4f})')
+
+        ax_roc.plot([0, 1], [0, 1], 'k--', lw=2)
+        ax_roc.set_xlim([0.0, 1.0])
+        ax_roc.set_ylim([0.0, 1.05])
+        ax_roc.set_xlabel('False Positive Rate', fontsize=12)
+        ax_roc.set_ylabel('True Positive Rate', fontsize=12)
+        ax_roc.set_title(f'ROC Curve: {name}', fontsize=14, fontweight='bold')
+        ax_roc.legend(loc="lower right")
+        ax_roc.grid(alpha=0.3)
+
+        # --- 2. Compute and Plot Precision-Recall Curve ---
+        ax_pr = axes[row_idx, 1]
+        precision, recall, average_precision = dict(), dict(), dict()
+        for i in range(n_classes):
+            precision[i], recall[i], _ = precision_recall_curve(y_test_bin[:, i], y_score[:, i])
+            average_precision[i] = average_precision_score(y_test_bin[:, i], y_score[:, i])
+            
+        # Compute macro-average PR curve
+        # (Macro-averaging PR curves is less standardized, so we report Micro-average for overall)
+        precision["micro"], recall["micro"], _ = precision_recall_curve(y_test_bin.ravel(), y_score.ravel())
+        average_precision["micro"] = average_precision_score(y_test_bin, y_score, average="micro")
+        
+        ax_pr.plot(recall["micro"], precision["micro"],
+                 label=f'Micro-average PR (area = {average_precision["micro"]:.4f})',
+                 color='navy', linestyle=':', linewidth=4)
+
+        for i, color in zip(range(n_classes), colors):
+            ax_pr.plot(recall[i], precision[i], color=color, lw=2,
+                     label=f'PR curve of class {class_labels[i]} (area = {average_precision[i]:.4f})')
+
+        ax_pr.set_xlim([0.0, 1.0])
+        ax_pr.set_ylim([0.0, 1.05])
+        ax_pr.set_xlabel('Recall', fontsize=12)
+        ax_pr.set_ylabel('Precision', fontsize=12)
+        ax_pr.set_title(f'Precision-Recall Curve: {name}', fontsize=14, fontweight='bold')
+        ax_pr.legend(loc="lower left")
+        ax_pr.grid(alpha=0.3)
+
+    plt.tight_layout()
+    plt.show()
+    
 
 # =====================================================================
 # ADVANCED & BONUS MODELS
@@ -829,5 +1021,40 @@ def plot_reliability_diagram(
     ax2.spines["bottom"].set_color("dimgray")
     ax2.spines["left"].set_color("dimgray")
 
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_structural_risk_minimization_srm(
+    model_complexity: np.ndarray,
+    empirical_risk: np.ndarray,
+    vc_confidence: np.ndarray,
+    true_risk: np.ndarray,
+    opt_complexity: float,
+    opt_risk: float,
+) -> None:
+    plt.figure(figsize=(10, 6))
+
+    # Plot the three fundamental curves
+    plt.plot(model_complexity, empirical_risk, 'b-', linewidth=2.5, label='Empirical Risk (Train Error)')
+    plt.plot(model_complexity, vc_confidence, 'g--', linewidth=2, label='VC Confidence (Penalty)')
+    plt.plot(model_complexity, true_risk, 'r-', linewidth=3, label='True Risk (Test Error)')
+
+    # Mark the optimal SRM sweet spot
+    plt.axvline(x=opt_complexity, color='black', linestyle=':', linewidth=1.5)
+    plt.scatter(opt_complexity, opt_risk, color='black', s=100, zorder=5)
+    plt.annotate('Optimal Capacity\n(SRM Sweet Spot)',
+                 xy=(opt_complexity, opt_risk),
+                 xytext=(opt_complexity + 0.5, opt_risk + 0.25),
+                 arrowprops=dict(facecolor='black', shrink=0.05, width=1.5, headwidth=8),
+                 fontsize=11, fontweight='bold')
+
+    plt.title('Structural Risk Minimization (SRM)', fontsize=14, fontweight='bold', pad=15)
+    plt.xlabel('Model Complexity (VC Dimension)', fontsize=12)
+    plt.ylabel('Error Rate', fontsize=12)
+    plt.xlim(1, 10)
+    plt.ylim(0, 1.2)
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.legend(loc='upper center', fontsize=11)
     plt.tight_layout()
     plt.show()
