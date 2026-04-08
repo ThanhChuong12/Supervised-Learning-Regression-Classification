@@ -1058,3 +1058,216 @@ def plot_structural_risk_minimization_srm(
     plt.legend(loc='upper center', fontsize=11)
     plt.tight_layout()
     plt.show()
+
+def plot_calibration_overview(
+    prob_models: dict,
+    X_test_scaled: np.ndarray,
+    y_test_bin: np.ndarray,
+    class_names: list,
+    color_palette: list = None,
+    figsize: tuple = (16, 12),
+    dpi: int = 110,
+) -> None:
+    """
+    Overview grid: overlay all models on the same axes for each class.
+    One subplot per class, all models shown together for direct comparison.
+    """
+    if color_palette is None:
+        color_palette = ['#0072B2', '#D55E00', '#009E73', '#CC79A7', '#F0E442']
+ 
+    from sklearn.calibration import calibration_curve
+ 
+    n_classes = len(class_names)
+    fig, axes = plt.subplots(2, 2, figsize=figsize, dpi=dpi)
+    axes = axes.flatten()
+ 
+    for class_idx in range(n_classes):
+        ax = axes[class_idx]
+        x = np.linspace(0, 1, 200)
+ 
+        # Reference diagonal (perfectly calibrated)
+        ax.plot([0, 1], [0, 1], 'k--', lw=2.0, label='Perfectly calibrated', zorder=0)
+ 
+        # Shade under-confident and over-confident regions
+        ax.fill_between(x, x, 1, alpha=0.06, color='red',
+                        label='Under-confident region', zorder=0)
+        ax.fill_between(x, 0, x, alpha=0.06, color='blue',
+                        label='Over-confident region', zorder=0)
+ 
+        # Plot calibration curve for each model
+        for color, (model_name, model) in zip(color_palette, prob_models.items()):
+            y_proba      = model.predict_proba(X_test_scaled)
+            y_prob_class = y_proba[:, class_idx]
+            y_true_class = y_test_bin[:, class_idx]
+ 
+            try:
+                frac_pos, mean_pred = calibration_curve(
+                    y_true_class, y_prob_class, n_bins=10, strategy='uniform'
+                )
+                ax.plot(mean_pred, frac_pos, 's-',
+                        color=color, linewidth=2.5, markersize=7,
+                        label=model_name, alpha=0.9)
+            except Exception as e:
+                print(f"  [Skip] {model_name} — Class {class_idx}: {e}")
+ 
+        ax.set_title(class_names[class_idx], fontsize=16, fontweight='bold', pad=12)
+        ax.set_xlabel('Mean Predicted Probability', fontsize=14, fontweight='bold')
+        ax.set_ylabel('Fraction of Positives', fontsize=14, fontweight='bold')
+        ax.tick_params(axis='both', labelsize=12)
+        ax.set_xlim([-0.02, 1.02])
+        ax.set_ylim([-0.02, 1.12])
+        ax.grid(True, linestyle='--', alpha=0.35)
+        for spine in ['top', 'right']:
+            ax.spines[spine].set_visible(False)
+ 
+    # Shared legend at the bottom
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc='lower center', ncol=3, fontsize=12, framealpha=0.95)
+ 
+    fig.suptitle(
+        'Reliability Diagrams — Calibration Comparison across Models (OvR Strategy)',
+        fontsize=18, fontweight='bold', y=1.01
+    )
+    plt.tight_layout(rect=[0, 0.08, 1, 1])
+    plt.show()
+ 
+ 
+def plot_calibration_per_model(
+    prob_models: dict,
+    X_test_scaled: np.ndarray,
+    y_test_bin: np.ndarray,
+    class_names: list,
+    n_cols: int = 3,
+    figsize_per_subplot: tuple = (8, 7),
+    dpi: int = 110,
+) -> None:
+    """
+    Per-model reliability diagrams: for each class, one subplot per model
+    showing the calibration curve with ECE score and confidence regions.
+    """
+    from sklearn.calibration import calibration_curve
+ 
+    for focus_class, focus_name in enumerate(class_names):
+        print(f"Reliability Diagrams — {focus_name} (OvR)")
+ 
+        n_models = len(prob_models)
+        n_rows = int(np.ceil(n_models / n_cols))
+        fw = figsize_per_subplot[0] * n_cols
+        fh = figsize_per_subplot[1] * n_rows
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(fw, fh), dpi=dpi)
+        axes = axes.flatten()
+ 
+        for idx, (model_name, model) in enumerate(prob_models.items()):
+            ax = axes[idx]
+            y_proba  = model.predict_proba(X_test_scaled)
+            y_prob_c = y_proba[:, focus_class]
+            y_true_c = y_test_bin[:, focus_class]
+ 
+            frac_pos, mean_pred = calibration_curve(
+                y_true_c, y_prob_c, n_bins=10, strategy='uniform'
+            )
+ 
+            # Reference diagonal
+            ax.plot([0, 1], [0, 1], 'k--', lw=1.5, label='Perfectly calibrated')
+ 
+            # Model calibration curve
+            ax.plot(mean_pred, frac_pos, 's-',
+                    color='#D55E00', linewidth=2.2, markersize=8, label=model_name)
+ 
+            # Red region (above diagonal): model is over-confident
+            ax.fill_between([0, 1], [0, 1], [1, 1], alpha=0.06, color='red',
+                            label='Over-confident region')
+ 
+            # Blue region (below diagonal): model is under-confident
+            ax.fill_between([0, 1], [0, 0], [0, 1], alpha=0.06, color='blue',
+                            label='Under-confident region')
+ 
+            # ECE = mean absolute deviation between predicted probability and true fraction
+            # Lower ECE → better calibrated
+            ece = np.mean(np.abs(frac_pos - mean_pred))
+            ax.text(0.03, 0.93, f'ECE = {ece:.4f}', transform=ax.transAxes,
+                    fontsize=14, color='#333333',
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='lightyellow', alpha=0.9))
+ 
+            ax.set_title(model_name, fontsize=15, fontweight='bold', pad=10)
+            ax.set_xlabel('Mean Predicted Probability', fontsize=13)
+            ax.set_ylabel('Fraction of Positives', fontsize=13)
+            ax.tick_params(axis='both', labelsize=12)
+            ax.set_xlim([-0.02, 1.02])
+            ax.set_ylim([-0.02, 1.12])
+            ax.legend(loc='lower right', fontsize=12, framealpha=0.9)
+            ax.grid(True, linestyle='--', alpha=0.35)
+            for spine in ['top', 'right']:
+                ax.spines[spine].set_visible(False)
+ 
+        # Hide unused subplots
+        for idx in range(n_models, len(axes)):
+            axes[idx].set_visible(False)
+ 
+        fig.suptitle(f'Per-model Reliability Diagram — {focus_name} vs Rest',
+                     fontsize=18, fontweight='bold', y=1.02)
+        plt.tight_layout()
+        plt.show()
+ 
+ 
+def plot_mcnemar_heatmaps(
+    all_comparisons: list,
+    alpha: float = 0.05,
+    n_cols: int = 3,
+    figsize: tuple = (18, 10),
+    dpi: int = 100,
+) -> None:
+    """
+    Visualize McNemar's test results as contingency heatmaps.
+    Green = statistically significant, Red = not significant.
+    """
+    fig, axes = plt.subplots(2, n_cols, figsize=figsize, dpi=dpi)
+    axes = axes.flatten()
+ 
+    for idx, row in enumerate(all_comparisons):
+        if idx >= len(axes):
+            break
+        ax = axes[idx]
+ 
+        # Build 2×2 contingency table
+        table = np.array([[row['n11'], row['n10']],
+                          [row['n01'], row['n00']]])
+        labels = np.array([
+            [f"Both correct\n{row['n11']}",      f"A correct & B incorrect\n{row['n10']}"],
+            [f"A incorrect & B correct\n{row['n01']}", f"Both wrong\n{row['n00']}"]
+        ])
+ 
+        # Green for significant results, red for non-significant
+        cmap = 'Greens' if row['significant'] else 'Reds'
+        sns.heatmap(table, annot=labels, fmt='', cmap=cmap, ax=ax,
+                    linewidths=2, linecolor='white', cbar=False,
+                    annot_kws={'size': 13, 'weight': 'bold'})
+ 
+        # Shorten model names for the title
+        short_a = row['Model A'].replace('Logistic Regression', 'LR')
+        short_b = (row['Model B']
+                   .replace('Logistic Regression', 'LR')
+                   .replace('Linear Discriminant Analysis', 'LDA')
+                   .replace('Quadratic Discriminant Analysis', 'QDA')
+                   .replace('Multiclass Perceptron', 'Perceptron'))
+ 
+        title_color = '#1a5c1a' if row['significant'] else '#8b0000'
+        ax.set_title(
+            f"{short_a}\nvs\n{short_b}\n"
+            f"χ²={row['chi2']:.3f}  p={row['p_value']:.4f}  →  {row['conclusion']}",
+            fontsize=10, fontweight='bold', color=title_color, pad=8
+        )
+        ax.set_xticklabels(['Model B correct', 'Model B wrong'], fontsize=10)
+        ax.set_yticklabels(['Model A correct', 'Model A wrong'], fontsize=10, rotation=0)
+ 
+    # Hide unused axes
+    for idx in range(len(all_comparisons), len(axes)):
+        axes[idx].set_visible(False)
+ 
+    fig.suptitle(
+        "McNemar's Test — Contingency Tables for All Comparisons (α = 0.05)\n"
+        "Green = Statistically Significant | Red = Not Significant",
+        fontsize=14, fontweight='bold', y=1.01
+    )
+    plt.tight_layout()
+    plt.show()
