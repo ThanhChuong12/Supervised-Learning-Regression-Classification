@@ -1,6 +1,7 @@
 import math
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.stats as stats
 
 
 def plot_lml_history(lml_history):
@@ -176,5 +177,113 @@ def plot_elastic_net_contour(l1_vals, l2_vals, mse_matrix, best_l1, best_l2):
     plt.xlim(-2, 4)
     plt.ylim(-2, 4)
     plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+def plot_learning_curves(losses_step, losses_cosine):
+    plt.figure(figsize=(14, 5))
+
+    plt.subplot(1, 2, 1)
+    plt.plot(losses_step, label='Step Decay', linewidth=2)
+    plt.xlabel('Epoch', fontsize=12)
+    plt.ylabel('Training Loss (MSE)', fontsize=12)
+    plt.title('Convergence: Step Decay Schedule', fontsize=14, fontweight='bold')
+    plt.grid(True, alpha=0.3)
+    plt.legend(fontsize=11)
+
+    plt.subplot(1, 2, 2)
+    plt.plot(losses_cosine, label='Cosine Annealing', color='orange', linewidth=2)
+    plt.xlabel('Epoch', fontsize=12)
+    plt.ylabel('Training Loss (MSE)', fontsize=12)
+    plt.title('Convergence: Cosine Annealing Schedule', fontsize=14, fontweight='bold')
+    plt.grid(True, alpha=0.3)
+    plt.legend(fontsize=11)
+
+    plt.tight_layout()
+    plt.show()
+
+def plot_residual_and_qq(y_train_pred_ols, residuals_train, y_test_pred_ols, residuals_test):
+    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+
+    # Residual Plot - Train
+    axes[0, 0].scatter(y_train_pred_ols, residuals_train, alpha=0.5, s=10)
+    axes[0, 0].axhline(y=0, color='r', linestyle='--', linewidth=2)
+    axes[0, 0].set_xlabel('Predicted Values', fontsize=12)
+    axes[0, 0].set_ylabel('Residuals', fontsize=12)
+    axes[0, 0].set_title('Residual Plot (Train Set)', fontsize=14, fontweight='bold')
+    axes[0, 0].grid(True, alpha=0.3)
+
+    # Residual Plot - Test
+    axes[0, 1].scatter(y_test_pred_ols, residuals_test, alpha=0.5, s=10, color='orange')
+    axes[0, 1].axhline(y=0, color='r', linestyle='--', linewidth=2)
+    axes[0, 1].set_xlabel('Predicted Values', fontsize=12)
+    axes[0, 1].set_ylabel('Residuals', fontsize=12)
+    axes[0, 1].set_title('Residual Plot (Test Set)', fontsize=14, fontweight='bold')
+    axes[0, 1].grid(True, alpha=0.3)
+
+    # QQ-Plot - Train
+    stats.probplot(residuals_train, dist="norm", plot=axes[1, 0])
+    axes[1, 0].set_title('QQ-Plot (Train Set)', fontsize=14, fontweight='bold')
+    axes[1, 0].grid(True, alpha=0.3)
+
+    # QQ-Plot - Test
+    stats.probplot(residuals_test, dist="norm", plot=axes[1, 1])
+    axes[1, 1].set_title('QQ-Plot (Test Set)', fontsize=14, fontweight='bold')
+    axes[1, 1].grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.show()
+
+def plot_actual_vs_predicted(y_test, pred_test):
+    plt.figure(figsize=(7, 5))
+    plt.scatter(y_test, pred_test, s=10, alpha=0.35)
+    mn = min(y_test.min(), pred_test.min())
+    mx = max(y_test.max(), pred_test.max())
+    plt.plot([mn, mx], [mn, mx], 'r--', linewidth=1)
+    plt.xlabel('Actual Appliances')
+    plt.ylabel('Predicted Appliances')
+    plt.title('Test: Actual vs Predicted (Sigmoid basis)')
+    plt.tight_layout()
+    plt.show()
+
+def plot_time_order_predictions(y_test, pred_test):
+    plt.figure(figsize=(10, 4))
+    idx = np.arange(len(y_test))
+    cut = min(500, len(y_test))
+    plt.plot(idx[:cut], y_test[:cut], label='Actual', linewidth=1)
+    plt.plot(idx[:cut], pred_test[:cut], label='Predicted', linewidth=1)
+    plt.title('Test (first window): Actual vs Predicted over time')
+    plt.xlabel('Test index (time order)')
+    plt.ylabel('Appliances')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+def plot_basis_validation_curves(poly_degrees, poly_val_mse, rbf_Ks, rbf_val_mse, sig_Ms, sig_val_mse, spline_knots, spline_val_mse):
+    plt.figure(figsize=(18, 4))
+    plt.subplot(1, 4, 1)
+    plt.plot(poly_degrees, poly_val_mse, marker='o')
+    plt.xlabel('Polynomial degree')
+    plt.ylabel('Validation MSE')
+    plt.title('Validation curve: Polynomial')
+
+    plt.subplot(1, 4, 2)
+    plt.plot(rbf_Ks, rbf_val_mse, marker='o')
+    plt.xlabel('Number of RBF centers (K)')
+    plt.ylabel('Validation MSE')
+    plt.title('Validation curve: Gaussian RBF')
+
+    plt.subplot(1, 4, 3)
+    plt.plot(sig_Ms, sig_val_mse, marker='o')
+    plt.xlabel('Sigmoid bases per feature (M)')
+    plt.ylabel('Validation MSE')
+    plt.title('Validation curve: Sigmoid')
+
+    plt.subplot(1, 4, 4)
+    plt.plot(spline_knots, spline_val_mse, marker='o')
+    plt.xlabel('Number of knots (n_knots)')
+    plt.ylabel('Validation MSE')
+    plt.title('Validation curve: Cubic Splines')
+
     plt.tight_layout()
     plt.show()
