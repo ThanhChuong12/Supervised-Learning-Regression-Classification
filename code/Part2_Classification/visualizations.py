@@ -15,6 +15,91 @@ import matplotlib.gridspec as gridspec
 from sklearn.metrics import confusion_matrix, roc_curve, precision_recall_curve, auc, average_precision_score
 from sklearn.preprocessing import label_binarize
 
+# =====================================================================
+# EDA
+# =====================================================================
+
+def plot_target_variable_distribution_count_and_pie(df_occupancy, occupancy_percent):
+    # Configure the figure size
+    plt.figure(figsize=(14, 6))
+
+    # Visualization
+
+    # Subplot 1: Bar Chart (Count)
+    plt.subplot(1, 2, 1)
+    # Fixed the warning: assigning x to hue and setting legend=False
+    ax = sns.countplot(x='Room_Occupancy_Count', hue='Room_Occupancy_Count', data=df_occupancy, palette='viridis', legend=False)
+    plt.title('Target Variable Distribution (Count)', fontsize=14, fontweight='bold')
+    plt.xlabel('Room Occupancy Count (Class)', fontsize=12)
+    plt.ylabel('Count of Samples', fontsize=12)
+
+    # Add count labels on top of bars
+    for p in ax.patches:
+        ax.annotate(f'{int(p.get_height())}', (p.get_x() + p.get_width() / 2., p.get_height()),
+                    ha='center', va='center', xytext=(0, 10), textcoords='offset points', fontsize=11)
+
+    # Subplot 2: Pie Chart (Percentage)
+    plt.subplot(1, 2, 2)
+    colors = sns.color_palette('viridis', n_colors=4)
+    explode = (0.1, 0, 0, 0)  # Slightly separate Class 0 to emphasize its dominance
+    plt.pie(occupancy_percent, labels=[f"Class {idx}" for idx in occupancy_percent.index], autopct='%1.2f%%',
+            startangle=140, colors=colors, explode=explode, shadow=True, textprops={'fontsize': 11})
+    plt.title('Class Proportion (%)', fontsize=14, fontweight='bold')
+    plt.axis('equal')  # Ensure circular shape
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_multivariate_sensor_features_correlation_matrix(corr_matrix):
+    plt.figure(figsize=(16, 14))
+    mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
+    cmap = sns.diverging_palette(230, 20, as_cmap=True)
+
+    # Plot the Heatmap
+    sns.heatmap(corr_matrix, mask=mask, cmap=cmap, vmax=1, vmin=-1, center=0,
+                square=True, linewidths=.5, cbar_kws={"shrink": .75},
+                annot=True, fmt=".2f", annot_kws={"size": 9})
+
+    plt.title('Multivariate Sensor Features Correlation Matrix', fontsize=16, fontweight='bold', pad=20)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_representative_features_boxplots_against_occupancy(df_occupancy):
+    # Select 1 representative feature with the strongest signal from each physical sensor group
+    # Here we choose: Light (S2_Light), CO2 (S5_CO2), Sound (S1_Sound), Temperature (S1_Temp)
+    representative_features = ['S2_Light', 'S5_CO2', 'S1_Sound', 'S1_Temp']
+
+    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+    axes = axes.flatten()
+
+    for i, feature in enumerate(representative_features):
+        sns.boxplot(x='Room_Occupancy_Count', y=feature, data=df_occupancy,
+                    ax=axes[i], palette='Set2', hue='Room_Occupancy_Count', legend=False)
+        axes[i].set_title(f'Distribution of {feature} against Occupancy', fontsize=12, fontweight='bold')
+        axes[i].set_xlabel('Occupancy Count (Classes)', fontsize=10)
+        axes[i].set_ylabel(f'Sensor Value ({feature})', fontsize=10)
+        axes[i].grid(axis='y', linestyle='--', alpha=0.6)
+    plt.tight_layout(pad=3.0)
+    plt.show()
+
+
+def plot_global_outlier_boxplots(df_occupancy, key_features):
+    plt.figure(figsize=(14, 5))
+    for i, col in enumerate(key_features, 1):
+        plt.subplot(1, 4, i)
+        sns.boxplot(y=df_occupancy[col], color='skyblue', fliersize=3, linewidth=1.5)
+        plt.title(f'Overall Dist: {col}', fontsize=12, fontweight='bold')
+        plt.ylabel('Sensor Record', fontsize=10)
+        plt.grid(axis='y', linestyle='--', alpha=0.5)
+    plt.tight_layout()
+    plt.show()
+
+
+# =====================================================================
+# MODELING
+# =====================================================================
 
 def plot_convergence_comparison(
     gd_model, 
