@@ -287,3 +287,233 @@ def plot_basis_validation_curves(poly_degrees, poly_val_mse, rbf_Ks, rbf_val_mse
 
     plt.tight_layout()
     plt.show()
+
+
+# Section 12.3 — Visualization: Learning Curves, Residual Plots, QQ-Plots 
+def plot_section12_learning_curves(train_sizes, train_mse, val_mse):
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    ax.plot(train_sizes, train_mse, 'o-', color='steelblue',
+            linewidth=2, markersize=6, label='Train MSE')
+    ax.plot(train_sizes, val_mse,  's-', color='tomato',
+            linewidth=2, markersize=6, label='Validation MSE')
+
+    ax.set_xlabel('Number of Training Samples', fontsize=12)
+    ax.set_ylabel('MSE', fontsize=12)
+    ax.set_title('Learning Curves — OLS (Normal Equations)',
+                 fontsize=14, fontweight='bold')
+    ax.legend(fontsize=11)
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_section12_residuals(y_pred_train, residuals_train,
+                              y_pred_test,  residuals_test):
+    def _add_bin_mean(ax, y_pred_flat, res_flat, n_bins=10):
+        bin_edges = np.percentile(y_pred_flat, np.linspace(0, 100, n_bins + 1))
+        centers, means = [], []
+        for i in range(n_bins):
+            mask = (y_pred_flat >= bin_edges[i]) & (y_pred_flat < bin_edges[i + 1])
+            if mask.sum() > 0:
+                centers.append((bin_edges[i] + bin_edges[i + 1]) / 2)
+                means.append(res_flat[mask].mean())
+        ax.plot(centers, means, 'o--', color='orange',
+                linewidth=2, markersize=7, label='Bin mean')
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+    # Train set
+    res_tr = residuals_train.ravel()
+    pred_tr = y_pred_train.ravel()
+    axes[0].scatter(pred_tr, res_tr, alpha=0.15, s=5, color='seagreen')
+    axes[0].axhline(0, color='red', linestyle='--', linewidth=1.5)
+    _add_bin_mean(axes[0], pred_tr, res_tr)
+    axes[0].set_xlabel('Predicted Values (ŷ)', fontsize=12)
+    axes[0].set_ylabel('Residuals (y − ŷ)', fontsize=12)
+    axes[0].set_title('Residual Plot — Train Set', fontsize=13, fontweight='bold')
+    axes[0].legend(fontsize=10)
+    axes[0].grid(True, alpha=0.3)
+
+    # Test set
+    res_te = residuals_test.ravel()
+    pred_te = y_pred_test.ravel()
+    axes[1].scatter(pred_te, res_te, alpha=0.25, s=8, color='steelblue')
+    axes[1].axhline(0, color='red', linestyle='--', linewidth=1.5)
+    _add_bin_mean(axes[1], pred_te, res_te)
+    axes[1].set_xlabel('Predicted Values (ŷ)', fontsize=12)
+    axes[1].set_ylabel('Residuals (y − ŷ)', fontsize=12)
+    axes[1].set_title('Residual Plot — Test Set', fontsize=13, fontweight='bold')
+    axes[1].legend(fontsize=10)
+    axes[1].grid(True, alpha=0.3)
+
+    plt.suptitle('Residuals vs. Predicted — OLS (Normal Equations)',
+                 fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_section12_predicted_vs_actual(y_train, y_pred_train,
+                                        y_test,  y_pred_test):
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+    for ax, y_true, y_pred_plot, label, color in [
+        (axes[0], y_train.ravel(), y_pred_train.ravel(), 'Train Set', 'seagreen'),
+        (axes[1], y_test.ravel(),  y_pred_test.ravel(),  'Test Set',  'steelblue'),
+    ]:
+        ax.scatter(y_true, y_pred_plot, alpha=0.25, s=8, color=color)
+        lo = min(y_true.min(), y_pred_plot.min()) - 10
+        hi = max(y_true.max(), y_pred_plot.max()) + 10
+        ax.plot([lo, hi], [lo, hi], 'r--', linewidth=1.5, label='y = ŷ  (perfect)')
+        ax.set_xlim(lo, hi)
+        ax.set_ylim(lo, hi)
+        ax.set_xlabel('Actual Values (y)', fontsize=12)
+        ax.set_ylabel('Predicted Values (ŷ)', fontsize=12)
+        ax.set_title(f'Predicted vs. Actual — {label}',
+                     fontsize=13, fontweight='bold')
+        ax.legend(fontsize=10)
+        ax.grid(True, alpha=0.3)
+        ax.set_aspect('equal', adjustable='box')
+
+    plt.suptitle('Predicted vs. Actual — OLS (Normal Equations)',
+                 fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_section12_qq_histogram(residuals_train, stats_train,
+                                 residuals_test,  stats_test):
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+
+    pairs = [
+        (residuals_train.ravel(), stats_train, 'Train Set', 'seagreen', 0),
+        (residuals_test.ravel(),  stats_test,  'Test Set',  'steelblue', 1),
+    ]
+
+    for res_flat, stat, label, color, row in pairs:
+        # QQ-Plot
+        ax_qq = axes[row][0]
+        (osm, osr), (slope, intercept, _) = stats.probplot(res_flat, dist='norm')
+        ax_qq.scatter(osm, osr, alpha=0.3, s=5, color=color)
+        xx = np.array([osm[0], osm[-1]])
+        ax_qq.plot(xx, slope * xx + intercept, 'r-', linewidth=2, label='Normal line')
+        ax_qq.set_xlabel('Theoretical Quantiles', fontsize=11)
+        ax_qq.set_ylabel('Sample Quantiles', fontsize=11)
+        ax_qq.set_title(f'QQ-Plot of Residuals — {label}',
+                        fontsize=12, fontweight='bold')
+        ax_qq.legend(fontsize=10)
+        ax_qq.grid(True, alpha=0.3)
+        sw_p = stat['shapiro_pvalue']
+        verdict = '✓ Normal (p>0.05)' if stat['is_normal'] else '✗ Non-normal (p≤0.05)'
+        ax_qq.text(0.03, 0.95,
+                   f"Shapiro-Wilk p = {sw_p:.4f}\n{verdict}",
+                   transform=ax_qq.transAxes, va='top', fontsize=10,
+                   bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.8))
+
+        # Histogram
+        ax_hist = axes[row][1]
+        ax_hist.hist(res_flat, bins=60, color=color, alpha=0.7,
+                     edgecolor='white', linewidth=0.4, density=True)
+        x_norm = np.linspace(res_flat.min(), res_flat.max(), 300)
+        from scipy.stats import norm as _norm
+        y_norm = _norm.pdf(x_norm, stat['mean'], stat['std'])
+        ax_hist.plot(x_norm, y_norm, 'r-', linewidth=2, label='Normal PDF')
+        ax_hist.axvline(0, color='navy', linestyle='--', linewidth=1.2,
+                        label='Zero line')
+        ax_hist.set_xlabel('Residual Value', fontsize=11)
+        ax_hist.set_ylabel('Density', fontsize=11)
+        ax_hist.set_title(f'Residual Distribution — {label}',
+                          fontsize=12, fontweight='bold')
+        ax_hist.legend(fontsize=10)
+        ax_hist.grid(True, alpha=0.3)
+        ax_hist.text(0.97, 0.95,
+                     f"Skew = {stat['skewness']:.3f}\nKurt = {stat['kurtosis']:.3f}",
+                     transform=ax_hist.transAxes, ha='right', va='top', fontsize=10,
+                     bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.8))
+
+    plt.suptitle('Residual Normality Diagnostics — OLS (Normal Equations)',
+                 fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_section12_model_comparison(model_summary):
+    names     = list(model_summary.keys())
+    rmses     = [model_summary[n]['mean_rmse'] for n in names]
+    rmse_stds = [model_summary[n]['std_rmse']  for n in names]
+    r2s       = [model_summary[n]['mean_r2']   for n in names]
+
+    x = np.arange(len(names))
+    fig, axes = plt.subplots(1, 2, figsize=(16, 5))
+
+    bars = axes[0].bar(x, rmses, yerr=rmse_stds, capsize=4,
+                       color='steelblue', alpha=0.8, edgecolor='white')
+    axes[0].set_xticks(x)
+    axes[0].set_xticklabels(names, rotation=35, ha='right', fontsize=10)
+    axes[0].set_ylabel('Mean CV RMSE', fontsize=12)
+    axes[0].set_title('Model Comparison — Mean CV RMSE (± std)',
+                      fontsize=13, fontweight='bold')
+    axes[0].grid(True, axis='y', alpha=0.3)
+    bars[int(np.argmin(rmses))].set_color('tomato')
+
+    bars2 = axes[1].bar(x, r2s, color='seagreen', alpha=0.8, edgecolor='white')
+    axes[1].set_xticks(x)
+    axes[1].set_xticklabels(names, rotation=35, ha='right', fontsize=10)
+    axes[1].set_ylabel('Mean CV R²', fontsize=12)
+    axes[1].set_title('Model Comparison — Mean CV R²',
+                      fontsize=13, fontweight='bold')
+    axes[1].grid(True, axis='y', alpha=0.3)
+    bars2[int(np.argmax(r2s))].set_color('gold')
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_section12_bias_variance(lambdas, bias_sq_list, variance_list, mse_list,
+                                  best_lam=None):
+    log_lam = np.log10(lambdas)
+
+    plt.figure(figsize=(10, 5))
+    plt.plot(log_lam, bias_sq_list,  'o-', color='tomato',    linewidth=2, label='Bias²')
+    plt.plot(log_lam, variance_list, 's-', color='steelblue', linewidth=2, label='Variance')
+    plt.plot(log_lam, mse_list,      '^-', color='slategray', linewidth=2, label='MSE (total)')
+
+    if best_lam is not None:
+        plt.axvline(np.log10(best_lam), color='black', linestyle='--',
+                    linewidth=1.5, label=f'Best λ  (log₁₀ = {np.log10(best_lam):.2f})')
+
+    plt.xlabel('log₁₀(λ)', fontsize=12)
+    plt.ylabel('Error', fontsize=12)
+    plt.title('Bias–Variance Tradeoff vs. Regularization Strength (Ridge)',
+              fontsize=13, fontweight='bold')
+    plt.legend(fontsize=11)
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_section12_runtime(timing_results):
+    names = list(timing_results.keys())
+    means = [timing_results[n]['mean_s'] for n in names]
+    stds  = [timing_results[n]['std_s']  for n in names]
+
+    y = np.arange(len(names))
+    fig, ax = plt.subplots(figsize=(10, max(3, len(names) * 0.8)))
+
+    bars = ax.barh(y, means, xerr=stds, capsize=4,
+                   color='steelblue', alpha=0.8, edgecolor='white')
+    ax.set_yticks(y)
+    ax.set_yticklabels(names, fontsize=11)
+    ax.set_xlabel('Mean Training Time (seconds)', fontsize=12)
+    ax.set_title('Computational Cost Comparison', fontsize=13, fontweight='bold')
+    ax.grid(True, axis='x', alpha=0.3)
+
+    max_val = max(means) if means else 1.0
+    for bar, val in zip(bars, means):
+        ax.text(bar.get_width() + max_val * 0.01,
+                bar.get_y() + bar.get_height() / 2,
+                f'{val:.4f}s', va='center', fontsize=10)
+
+    plt.tight_layout()
+    plt.show()
