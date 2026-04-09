@@ -1273,3 +1273,622 @@ def cv_bayesian_hyperparams(
     
     return best_alpha, best_beta, cv_results
 
+# SECTION 12: EXPERIMENTAL ANALYSIS & COMPUTATIONAL COMPLEXITY
+
+# 12.1 Learning Curves Analysis - Multiple Models
+def compute_learning_curves_multiple_models(
+    Phi_train: np.ndarray,
+    y_train: np.ndarray,
+    Phi_val: np.ndarray,
+    y_val: np.ndarray,
+    model_configs: dict,
+    n_points: int = 10
+) -> dict:
+    n, d = Phi_train.shape
+    min_size = max(d + 10, n // n_points)
+    sizes = np.linspace(min_size, n, n_points, dtype=int)
+    
+    results = {}
+    
+    for model_name, fit_fn in model_configs.items():
+        train_losses = []
+        val_losses = []
+        
+        for size in sizes:
+            Phi_sub = Phi_train[:size]
+            y_sub = y_train[:size]
+            
+            try:
+                w = fit_fn(Phi_sub, y_sub)
+                train_pred = Phi_sub @ w
+                val_pred = Phi_val @ w
+                
+                train_losses.append(float(np.mean((y_sub - train_pred) ** 2)))
+                val_losses.append(float(np.mean((y_val - val_pred) ** 2)))
+            except Exception as e:
+                print(f"Warning: {model_name} failed at size {size}: {e}")
+                train_losses.append(np.nan)
+                val_losses.append(np.nan)
+        
+        results[model_name] = {
+            'sizes': sizes,
+            'train_mse': np.array(train_losses),
+            'val_mse': np.array(val_losses)
+        }
+    
+    return results
+
+
+def analyze_learning_curve_convergence(sizes: np.ndarray, val_mse: np.ndarray, 
+                                       threshold: float = 0.01) -> dict:
+    # Check if curve is converging (slope flattening)
+    if len(val_mse) < 3:
+        return {'converged': False, 'message': 'Not enough data points'}
+    
+    # Compute relative changes in last 3 points
+    recent_changes = np.abs(np.diff(val_mse[-3:])) / (val_mse[-3:-1] + 1e-10)
+    
+    converged = np.all(recent_changes < threshold)
+    
+    # Estimate if more data would help (check slope)
+    if len(val_mse) >= 2:
+        final_slope = (val_mse[-1] - val_mse[-2]) / (sizes[-1] - sizes[-2])
+        improvement_potential = abs(final_slope) > 1e-6
+    else:
+        improvement_potential = True
+    
+    return {
+        'converged': converged,
+        'final_val_mse': float(val_mse[-1]),
+        'recent_changes': recent_changes.tolist(),
+        'improvement_potential': improvement_potential,
+        'message': 'Converged' if converged else 'Still improving' if improvement_potential else 'Plateaued'
+    }
+
+# 12.2 Residual Distribution Analysis
+def compute_residual_statistics(residuals: np.ndarray) -> dict:
+    from scipy import stats as scipy_stats
+    
+    residuals = residuals.ravel()
+    
+    # Basic statistics
+    mean_res = float(np.mean(residuals))
+    std_res = float(np.std(residuals))
+    median_res = float(np.median(residuals))
+    
+    # Normality test (Shapiro-Wilk)
+    # Only use subset if too large (Shapiro-Wilk has sample size limit)
+    if len(residuals) > 5000:
+        sample_idx = np.random.choice(len(residuals), 5000, replace=False)
+        shapiro_stat, shapiro_p = scipy_stats.shapiro(residuals[sample_idx])
+    else:
+        shapiro_stat, shapiro_p = scipy_stats.shapiro(residuals)
+    
+    # Skewness and Kurtosis
+    skewness = float(scipy_stats.skew(residuals))
+    kurtosis = float(scipy_stats.kurtosis(residuals))
+    
+    # Quantiles for QQ-plot
+    quantiles = np.percentile(residuals, [25, 50, 75])
+    
+    return {
+        'mean': mean_res,
+        'std': std_res,
+        'median': median_res,
+        'skewness': skewness,
+        'kurtosis': kurtosis,
+        'shapiro_statistic': float(shapiro_stat),
+        'shapiro_pvalue': float(shapiro_p),
+        'is_normal': shapiro_p > 0.05,
+        'q25': float(quantiles[0]),
+        'q50': float(quantiles[1]),
+        'q75': float(quantiles[2])
+    }
+
+
+def durbin_watson_test(residuals: np.ndarray) -> float:
+    residuals = residuals.ravel()
+    diff_residuals = np.diff(residuals)
+    
+    numerator = np.sum(diff_residuals ** 2)
+    denominator = np.sum(residuals ** 2)
+    
+    dw_stat = numerator / (denominator + 1e-10)
+    
+    return float(dw_stat)
+
+
+def analyze_residual_patterns(y_pred: np.ndarray, residuals: np.ndarray, 
+                              n_bins: int = 10) -> dict:
+    y_pred = y_pred.ravel()
+    residuals = residuals.ravel()
+    
+    # Divide predictions into bins
+    bins = np.linspace(y_pred.min(), y_pred.max(), n_bins + 1)
+    bin_indices = np.digitize(y_pred, bins) - 1
+    bin_indices = np.clip(bin_indices, 0, n_bins - 1)
+    
+    # Compute statistics per bin
+    bin_stats = []
+    for i in range(n_bins):
+        mask = bin_indices == i
+        if np.sum(mask) > 0:
+            bin_residuals = residuals[mask]
+            bin_stats.append({
+                'bin_center': float((bins[i] + bins[i+1]) / 2),
+                'count': int(np.sum(mask)),
+                'mean_residual': float(np.mean(bin_residuals)),
+                'std_residual': float(np.std(bin_residuals)),
+                'abs_mean_residual': float(np.mean(np.abs(bin_residuals)))
+            })
+    
+    # Check for heteroscedasticity pattern (funnel shape)
+    stds = [b['std_residual'] for b in bin_stats]
+    std_trend = np.polyfit(range(len(stds)), stds, 1)[0]  # slope of std vs bin
+    
+    has_funnel = abs(std_trend) > 0.1 * np.mean(stds)
+    
+    return {
+        'bin_statistics': bin_stats,
+        'std_trend_slope': float(std_trend),
+        'has_heteroscedasticity_pattern': has_funnel
+    }
+
+# 12.3 Predicted vs Actual - Error Pattern Analysis
+def analyze_prediction_errors_by_range(y_true: np.ndarray, y_pred: np.ndarray, 
+                                       n_quantiles: int = 4) -> dict:
+    y_true = y_true.ravel()
+    y_pred = y_pred.ravel()
+    
+    # Divide into quantiles based on true values
+    quantile_edges = np.percentile(y_true, np.linspace(0, 100, n_quantiles + 1))
+    
+    results = []
+    for i in range(n_quantiles):
+        lower = quantile_edges[i]
+        upper = quantile_edges[i + 1]
+        
+        # Include upper bound in last quantile
+        if i == n_quantiles - 1:
+            mask = (y_true >= lower) & (y_true <= upper)
+        else:
+            mask = (y_true >= lower) & (y_true < upper)
+        
+        if np.sum(mask) > 0:
+            y_true_q = y_true[mask]
+            y_pred_q = y_pred[mask]
+            
+            errors = y_true_q - y_pred_q
+            abs_errors = np.abs(errors)
+            
+            results.append({
+                'quantile': i + 1,
+                'range': f'[{lower:.1f}, {upper:.1f}]',
+                'n_samples': int(np.sum(mask)),
+                'mean_true': float(np.mean(y_true_q)),
+                'mse': float(np.mean(errors ** 2)),
+                'rmse': float(np.sqrt(np.mean(errors ** 2))),
+                'mae': float(np.mean(abs_errors)),
+                'median_ae': float(np.median(abs_errors)),
+                'max_error': float(np.max(abs_errors))
+            })
+    
+    return {'quantile_analysis': results}
+
+
+def identify_worst_predictions(y_true: np.ndarray, y_pred: np.ndarray, 
+                               top_k: int = 10) -> dict:
+    y_true = y_true.ravel()
+    y_pred = y_pred.ravel()
+    
+    abs_errors = np.abs(y_true - y_pred)
+    worst_indices = np.argsort(abs_errors)[-top_k:][::-1]
+    
+    worst_predictions = []
+    for idx in worst_indices:
+        worst_predictions.append({
+            'index': int(idx),
+            'true_value': float(y_true[idx]),
+            'predicted_value': float(y_pred[idx]),
+            'error': float(y_true[idx] - y_pred[idx]),
+            'abs_error': float(abs_errors[idx]),
+            'relative_error': float(abs_errors[idx] / (abs(y_true[idx]) + 1e-10))
+        })
+    
+    return {
+        'worst_predictions': worst_predictions,
+        'mean_worst_error': float(np.mean([p['abs_error'] for p in worst_predictions]))
+    }
+
+# 12.4 Computational Complexity Analysis
+def measure_training_time_vs_samples(Phi_train: np.ndarray, y_train: np.ndarray,
+                                     fit_fn, sample_sizes: list = None,
+                                     n_repeats: int = 3) -> dict:
+    n_total = Phi_train.shape[0]
+    
+    if sample_sizes is None:
+        # Logarithmic scale from 100 to n_total
+        sample_sizes = np.unique(np.logspace(
+            np.log10(100), 
+            np.log10(n_total), 
+            10, 
+            dtype=int
+        ))
+        sample_sizes = [s for s in sample_sizes if s <= n_total]
+    
+    results = []
+    
+    for size in sample_sizes:
+        times = []
+        for _ in range(n_repeats):
+            Phi_sub = Phi_train[:size]
+            y_sub = y_train[:size]
+            
+            start = time.time()
+            try:
+                _ = fit_fn(Phi_sub, y_sub)
+                elapsed = time.time() - start
+                times.append(elapsed)
+            except Exception as e:
+                print(f"Warning: Failed at size {size}: {e}")
+                times.append(np.nan)
+        
+        results.append({
+            'n_samples': int(size),
+            'mean_time': float(np.nanmean(times)),
+            'std_time': float(np.nanstd(times)),
+            'min_time': float(np.nanmin(times)),
+            'max_time': float(np.nanmax(times))
+        })
+    
+    return {'timing_results': results}
+
+
+def measure_training_time_vs_features(X_train: np.ndarray, y_train: np.ndarray,
+                                      fit_fn, feature_counts: list = None,
+                                      n_repeats: int = 3) -> dict:
+    n_total_features = X_train.shape[1]
+    
+    if feature_counts is None:
+        feature_counts = np.unique(np.linspace(5, n_total_features, 8, dtype=int))
+        feature_counts = [f for f in feature_counts if f <= n_total_features]
+    
+    results = []
+    
+    for n_features in feature_counts:
+        times = []
+        for _ in range(n_repeats):
+            # Select first n_features
+            X_sub = X_train[:, :n_features]
+            Phi_sub = add_bias(X_sub)
+            
+            start = time.time()
+            try:
+                _ = fit_fn(Phi_sub, y_train)
+                elapsed = time.time() - start
+                times.append(elapsed)
+            except Exception as e:
+                print(f"Warning: Failed at {n_features} features: {e}")
+                times.append(np.nan)
+        
+        results.append({
+            'n_features': int(n_features),
+            'mean_time': float(np.nanmean(times)),
+            'std_time': float(np.nanstd(times)),
+            'min_time': float(np.nanmin(times)),
+            'max_time': float(np.nanmax(times))
+        })
+    
+    return {'timing_results': results}
+
+
+def estimate_memory_usage(Phi: np.ndarray, method: str = 'normal_equations') -> dict:
+    N, M = Phi.shape
+    bytes_per_float = 8  # float64
+    
+    # Common: store Phi and y
+    base_memory = (N * M + N) * bytes_per_float
+    
+    if method == 'normal_equations':
+        # Need: Phi^T @ Phi (M x M), Phi^T @ y (M), w (M)
+        additional = (M * M + M + M) * bytes_per_float
+        
+    elif method == 'gradient_descent':
+        # Need: w (M), gradient (M), predictions (N)
+        additional = (M + M + N) * bytes_per_float
+        
+    elif method == 'kernel_ridge':
+        # Need: K (N x N), alpha (N)
+        additional = (N * N + N) * bytes_per_float
+    else:
+        additional = 0
+    
+    total_bytes = base_memory + additional
+    total_mb = total_bytes / (1024 ** 2)
+    
+    return {
+        'method': method,
+        'n_samples': N,
+        'n_features': M,
+        'base_memory_mb': float(base_memory / (1024 ** 2)),
+        'additional_memory_mb': float(additional / (1024 ** 2)),
+        'total_memory_mb': float(total_mb)
+    }
+
+
+def extrapolate_scalability(timing_results: list, target_sizes: list,
+                            complexity_order: float = 3.0) -> dict:
+    # Fit power law: time = a * N^complexity_order
+    sizes = np.array([r['n_samples'] for r in timing_results])
+    times = np.array([r['mean_time'] for r in timing_results])
+    
+    # Use log-log linear regression
+    log_sizes = np.log(sizes)
+    log_times = np.log(times + 1e-10)
+    
+    # Fit: log(time) = log(a) + complexity_order * log(N)
+    # But we fix complexity_order, so just find a
+    a = np.exp(np.mean(log_times - complexity_order * log_sizes))
+    
+    predictions = []
+    for target_size in target_sizes:
+        predicted_time = a * (target_size ** complexity_order)
+        predictions.append({
+            'n_samples': int(target_size),
+            'predicted_time_seconds': float(predicted_time),
+            'predicted_time_minutes': float(predicted_time / 60),
+            'predicted_time_hours': float(predicted_time / 3600)
+        })
+    
+    return {
+        'complexity_order': complexity_order,
+        'coefficient_a': float(a),
+        'predictions': predictions
+    }
+
+
+# 12.5 Bias-Variance Decomposition (Enhanced Bootstrap)
+def bias_variance_decomposition_single_lambda(
+    Phi_train: np.ndarray,
+    y_train: np.ndarray,
+    Phi_test: np.ndarray,
+    y_test: np.ndarray,
+    fit_fn,
+    n_bootstrap: int = 100,
+    seed: int = 42
+) -> dict:
+    rng = np.random.default_rng(seed)
+    N_train = Phi_train.shape[0]
+    N_test = Phi_test.shape[0]
+    
+    all_predictions = np.zeros((n_bootstrap, N_test))
+    
+    for b in range(n_bootstrap):
+        bootstrap_indices = rng.choice(N_train, size=N_train, replace=True)
+        Phi_b = Phi_train[bootstrap_indices]
+        y_b = y_train[bootstrap_indices]
+        
+        try:
+            w_b = fit_fn(Phi_b, y_b)
+            all_predictions[b, :] = Phi_test @ w_b
+        except Exception as e:
+            print(f"Warning: Bootstrap {b} failed: {e}")
+            all_predictions[b, :] = np.nan
+    
+    # Remove failed bootstraps
+    valid_mask = ~np.isnan(all_predictions).any(axis=1)
+    all_predictions = all_predictions[valid_mask]
+    
+    if len(all_predictions) == 0:
+        return {
+            'bias_squared': np.nan,
+            'variance': np.nan,
+            'mse': np.nan,
+            'irreducible_error': np.nan
+        }
+    
+    # Compute mean prediction across bootstraps
+    mean_predictions = np.mean(all_predictions, axis=0)
+    
+    # Bias^2: squared difference between mean prediction and true values
+    bias_sq = np.mean((mean_predictions - y_test) ** 2)
+    
+    # Variance: variance of predictions across bootstraps
+    variance = np.mean(np.var(all_predictions, axis=0))
+    
+    # Total MSE
+    mse_total = np.mean((all_predictions - y_test[np.newaxis, :]) ** 2)
+    
+    # Irreducible error (approximation)
+    irreducible = mse_total - bias_sq - variance
+    
+    return {
+        'bias_squared': float(bias_sq),
+        'variance': float(variance),
+        'mse': float(mse_total),
+        'irreducible_error': float(max(0, irreducible)),  # ensure non-negative
+        'n_valid_bootstraps': int(len(all_predictions))
+    }
+
+
+def bias_variance_tradeoff_analysis(
+    Phi_train: np.ndarray,
+    y_train: np.ndarray,
+    Phi_test: np.ndarray,
+    y_test: np.ndarray,
+    model_configs: dict,
+    n_bootstrap: int = 100,
+    seed: int = 42
+) -> dict:
+    results = {}
+    
+    for model_name, fit_fn in model_configs.items():
+        print(f"Computing bias-variance for {model_name}...")
+        decomp = bias_variance_decomposition_single_lambda(
+            Phi_train, y_train, Phi_test, y_test,
+            fit_fn, n_bootstrap, seed
+        )
+        results[model_name] = decomp
+    
+    return results
+
+# 12.6 Model Comparison - Comprehensive Summary
+def create_comprehensive_model_comparison(
+    model_metrics: dict,
+    timing_info: dict = None,
+    bias_variance_info: dict = None,
+    complexity_info: dict = None
+) -> dict:
+    comparison = {}
+    
+    for model_name in model_metrics.keys():
+        entry = {
+            'model': model_name,
+            **model_metrics[model_name]
+        }
+        
+        if timing_info and model_name in timing_info:
+            entry['training_time_s'] = timing_info[model_name]
+        
+        if bias_variance_info and model_name in bias_variance_info:
+            entry['bias_squared'] = bias_variance_info[model_name]['bias_squared']
+            entry['variance'] = bias_variance_info[model_name]['variance']
+        
+        if complexity_info and model_name in complexity_info:
+            entry['complexity'] = complexity_info[model_name]
+        
+        comparison[model_name] = entry
+    
+    return comparison
+
+
+def rank_models_multi_criteria(comparison: dict, 
+                               criteria_weights: dict = None) -> list:
+    if criteria_weights is None:
+        criteria_weights = {'RMSE': 1.0}
+    
+    # Normalize criteria to [0, 1] range
+    all_values = {criterion: [] for criterion in criteria_weights.keys()}
+    
+    for model_name, entry in comparison.items():
+        for criterion in criteria_weights.keys():
+            if criterion in entry and not np.isnan(entry[criterion]):
+                all_values[criterion].append(entry[criterion])
+    
+    # Compute min/max for normalization
+    ranges = {}
+    for criterion, values in all_values.items():
+        if len(values) > 0:
+            ranges[criterion] = {
+                'min': np.min(values),
+                'max': np.max(values),
+                'range': np.max(values) - np.min(values)
+            }
+    
+    # Compute weighted scores
+    scores = []
+    for model_name, entry in comparison.items():
+        score = 0.0
+        total_weight = 0.0
+        
+        for criterion, weight in criteria_weights.items():
+            if criterion in entry and criterion in ranges:
+                value = entry[criterion]
+                if not np.isnan(value):
+                    # Normalize to [0, 1]
+                    r = ranges[criterion]
+                    if r['range'] > 0:
+                        normalized = (value - r['min']) / r['range']
+                    else:
+                        normalized = 0.0
+                    
+                    score += weight * normalized
+                    total_weight += weight
+        
+        if total_weight > 0:
+            score /= total_weight
+        
+        scores.append((model_name, float(score)))
+    
+    # Sort by score (lower is better)
+    ranked = sorted(scores, key=lambda x: x[1])
+    
+    return ranked
+
+
+def generate_model_selection_recommendation(ranked_models: list,
+                                           comparison: dict,
+                                           dataset_size: int) -> dict:
+    best_model = ranked_models[0][0]
+    best_entry = comparison[best_model]
+    
+    # Determine dataset size category
+    if dataset_size < 5000:
+        size_category = 'small'
+    elif dataset_size < 50000:
+        size_category = 'medium'
+    else:
+        size_category = 'large'
+    
+    # Generate recommendation text
+    recommendation = {
+        'best_overall_model': best_model,
+        'best_model_metrics': best_entry,
+        'dataset_size_category': size_category,
+        'top_3_models': [name for name, _ in ranked_models[:3]],
+        'reasoning': []
+    }
+    
+    # Add reasoning
+    if 'RMSE' in best_entry:
+        recommendation['reasoning'].append(
+            f"Best RMSE: {best_entry['RMSE']:.4f}"
+        )
+    
+    if 'training_time_s' in best_entry:
+        recommendation['reasoning'].append(
+            f"Training time: {best_entry['training_time_s']:.2f}s"
+        )
+    
+    if 'R2' in best_entry:
+        if best_entry['R2'] < 0.3:
+            recommendation['reasoning'].append(
+                "Warning: Low R² suggests model may be too simple for this data"
+            )
+    
+    return recommendation
+
+def compute_model_summary_from_cv(cv_results: dict) -> dict:
+    summary = {}
+    for name, folds in cv_results.items():
+        mse_vals  = np.array([f['MSE']  for f in folds])
+        rmse_vals = np.array([f['RMSE'] for f in folds])
+        mae_vals  = np.array([f['MAE']  for f in folds])
+        r2_vals   = np.array([f['R2']   for f in folds])
+        summary[name] = {
+            'mean_mse':  float(np.mean(mse_vals)),
+            'std_mse':   float(np.std(mse_vals)),
+            'mean_rmse': float(np.mean(rmse_vals)),
+            'std_rmse':  float(np.std(rmse_vals)),
+            'mean_mae':  float(np.mean(mae_vals)),
+            'std_mae':   float(np.std(mae_vals)),
+            'mean_r2':   float(np.mean(r2_vals)),
+            'std_r2':    float(np.std(r2_vals)),
+        }
+    return summary
+
+
+def time_method_comparison(methods: dict, Phi: np.ndarray, y: np.ndarray,
+                           n_repeats: int = 5) -> dict:
+    results = {}
+    for name, fn in methods.items():
+        times = []
+        for _ in range(n_repeats):
+            t0 = time.time()
+            fn(Phi, y)
+            times.append(time.time() - t0)
+        results[name] = {
+            'mean_s': float(np.mean(times)),
+            'std_s':  float(np.std(times)),
+        }
+    return results
