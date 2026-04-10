@@ -1,5 +1,5 @@
 % 'draft' mode can be used to speed up compilation
-\documentclass[oneside,final]{hcmus-report}
+\documentclass[oneside]{hcmus-report}
 \usepackage{codespace}
 
 % Draft watermark
@@ -10,6 +10,7 @@
 
 % Better tables
 % Wide tables go to https://tex.stackexchange.com/q/332902
+
 \usepackage{array,longtable,multicol,multirow,siunitx,tabularx}
 
 % Better enum
@@ -20,6 +21,8 @@
 
 % Add options for figures, like max width, framing, etc.
 \usepackage[export]{adjustbox}
+
+\usepackage{caption} 
 
 % References
 % Use \Cref{} instead of \ref{}
@@ -33,9 +36,31 @@
 % Sub-preambles
 % https://github.com/MartinScharrer/standalone
 
+\usepackage{xurl}
+\usepackage{hyperref} % (Thêm dòng này nếu bạn muốn link có màu và click vào được)
+
+\usepackage{xcolor}
+\usepackage{colortbl}
+% ============================================================
+% CUSTOM: Comment các dòng titlesec trong report.tex vì đã config trong .cls
+% ============================================================
+% \usepackage{titlesec}
+
+% Định nghĩa màu xanh dương đậm (Navy Blue) thanh lịch
+% \definecolor{AcademicBlue}{RGB}{0, 0, 128} 
+
+% Cấp 1 (Section): Chữ to nhất (\Large), in đậm, màu xanh
+% \titleformat*{\section}{\color{AcademicBlue}\normalfont\Large\bfseries}
+
+% Cấp 2 (Subsection): Chữ to vừa (\large), in đậm, màu xanh
+% \titleformat*{\subsection}{\color{AcademicBlue}\normalfont\large\bfseries}
+
+% Cấp 3 (Subsubsection): Kích thước chữ bình thường (\normalsize), in đậm, màu xanh
+% \titleformat*{\subsubsection}{\color{AcademicBlue}\normalfont\normalsize\bfseries}
+
 % Configurations
 \coursename{Nhập môn học máy}
-\reporttype{Báo cáo đồ án 1}
+\reporttype{BÁO CÁO ĐỒ ÁN 1}
 \title{Học có giám sát và ứng dụng}
 \advisor{& ThS. Lê Nhựt Nam &}
 \stuname{%
@@ -86,6 +111,12 @@
 \AtBeginDocument{\renewcommand{\figurename}{Hình}}
 \AtBeginDocument{\renewcommand{\refname}{Các nguồn tài liệu tham khảo}}
 
+% Reduce layout warnings and satisfy fancyhdr requirements
+\setlength{\headheight}{41pt}
+\setlength{\hfuzz}{100pt}
+\hbadness=10000
+\emergencystretch=2em
+
 \begin{document}
 \coverpage%
 
@@ -108,7 +139,7 @@
 \phantomsection
 \addcontentsline{toc}{section}{Các nguồn tài liệu tham khảo}
 
-\bibliographystyle{plain}
+\bibliographystyle{IEEEtran}
 \bibliography{refs/example.bib}
 \nocite{*}
 
