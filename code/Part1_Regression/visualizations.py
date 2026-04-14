@@ -517,3 +517,26 @@ def plot_section12_runtime(timing_results):
 
     plt.tight_layout()
     plt.show()
+
+
+def plot_feature_ablation(feat_ablation):
+    """
+    Bar chart showing the impact of dropping each feature group on validation MSE.
+    A positive delta means the group is important (removing it hurts performance).
+
+    Parameters
+    ----------
+    feat_ablation : list[dict]
+        List of dicts sorted by delta_val_mse (descending). Each dict must have:
+          - 'dropped_group': str  — name of the feature group that was removed
+          - 'delta_val_mse': float — change in validation MSE when group is removed
+    """
+    plt.figure(figsize=(10, 4))
+    plt.bar([r['dropped_group'] for r in feat_ablation],
+            [r['delta_val_mse'] for r in feat_ablation])
+    plt.axhline(0, color='k', linewidth=1)
+    plt.xticks(rotation=45, ha='right')
+    plt.ylabel('Δ Validation MSE (drop group)')
+    plt.title('Feature-group ablation impact (higher = more important)')
+    plt.tight_layout()
+    plt.show()

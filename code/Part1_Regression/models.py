@@ -368,12 +368,12 @@ class LinearRegression:
     @staticmethod
     def fit_wls(Phi: np.ndarray, y: np.ndarray, weights: np.ndarray,
                 bias_is_first: bool = True) -> np.ndarray:
-        # Create diagonal weight matrix
-        W = np.diag(np.sqrt(weights))
+        # Tối ưu RAM: Dùng broadcasting thay vì ma trận chéo N x N
+        sqrt_w = np.sqrt(weights)
 
-        # Transform features and targets: Phi_w = W @ Phi, y_w = W @ y
-        Phi_weighted = W @ Phi
-        y_weighted = W @ y
+        # Transform features and targets
+        Phi_weighted = Phi * sqrt_w[:, np.newaxis]
+        y_weighted = y * sqrt_w
 
         # Solve weighted normal equations: w = (Phi_w^T Phi_w)^(-1) Phi_w^T y_w
         w = LinearRegression.fit_ols(Phi_weighted, y_weighted, bias_is_first=bias_is_first)
@@ -763,10 +763,10 @@ class RobustRegression:
             # 3. Tính trọng số IRLS từ Huber
             sample_weights = RobustRegression.huber_weights(residuals, delta)
 
-            # 4. Giải bài toán WLS (Weighted Least Squares)
-            W_diag = np.diag(np.sqrt(sample_weights))
-            Phi_w = W_diag @ Phi
-            y_w = W_diag @ y
+            # 4. Giải bài toán WLS bằng Broadcasting để ngăn tràn RAM (MemoryError)
+            sqrt_w = np.sqrt(sample_weights)
+            Phi_w = Phi * sqrt_w[:, np.newaxis]
+            y_w = y * sqrt_w
 
             # Giải bằng Ridge (hoặc OLS nếu lam=0)
             A = Phi_w.T @ Phi_w
