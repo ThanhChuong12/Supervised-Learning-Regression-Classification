@@ -1,7 +1,13 @@
 import math
 import numpy as np
+import pandas as pd
+import seaborn as sns
 import matplotlib.pyplot as plt
 import scipy.stats as stats
+from sklearn.impute import SimpleImputer, KNNImputer
+from sklearn.metrics import mean_squared_error, r2_score, accuracy_score, f1_score
+from copy import deepcopy
+from models import LinearRegression
 
 
 def plot_lml_history(lml_history):
@@ -538,5 +544,117 @@ def plot_feature_ablation(feat_ablation):
     plt.xticks(rotation=45, ha='right')
     plt.ylabel('Δ Validation MSE (drop group)')
     plt.title('Feature-group ablation impact (higher = more important)')
+    plt.tight_layout()
+    plt.show()
+
+def plot_learning_rate_convergence(losses_step, losses_cosine):
+    """
+    Vẽ Convergence Curve so sánh Train Loss giữa 2 chiến lược Learning Rate.
+    """
+    epochs_step = range(1, len(losses_step) + 1)
+    epochs_cosine = range(1, len(losses_cosine) + 1)
+    
+    plt.figure(figsize=(10, 6))
+    
+    # Vẽ line cho Step Decay
+    plt.plot(epochs_step, losses_step, label='Mini-batch GD (Step Decay)', 
+             color='blue', linewidth=2, linestyle='-')
+    
+    # Vẽ line cho Cosine Annealing
+    plt.plot(epochs_cosine, losses_cosine, label='Mini-batch GD (Cosine Annealing)', 
+             color='green', linewidth=2, linestyle='-')
+    
+    # Xác định epoch đạt min loss cho Cosine (hoặc Step) để Highlight
+    min_loss_cosine = min(losses_cosine)
+    min_epoch_cosine = losses_cosine.index(min_loss_cosine) + 1
+    
+    plt.scatter(min_epoch_cosine, min_loss_cosine, color='red', s=60, zorder=5)
+    plt.annotate(f'Min Loss Cosine: {min_loss_cosine:.4f} \n(Epoch {min_epoch_cosine})', 
+                 (min_epoch_cosine, min_loss_cosine), 
+                 textcoords="offset points", xytext=(0,15), ha='center', color='red')
+    # Trang trí biểu đồ
+    plt.title('Convergence Analysis: Step Decay vs. Cosine Annealing', fontsize=14, fontweight='bold')
+    plt.xlabel('Epochs', fontsize=12)
+    plt.ylabel('Training Loss', fontsize=12)
+    plt.legend()
+    plt.grid(True, linestyle='--', alpha=0.6)
+    
+    # Có thể giới hạn trục y nếu những epoch đầu tiên Loss quá cao làm biểu đồ bị thu nhỏ
+    # plt.ylim(0, max(losses_cosine[-1], losses_step[-1]) * 3) 
+    
+    plt.tight_layout()
+    plt.show()
+
+def evaluate_custom_corruption(Phi_train, y_train, Phi_val, y_val, model_name, best_lam_ridge, best_lam_lasso):
+    """Huấn luyện và tính Metrics sử dụng toàn bộ hàm từ class LinearRegression của bạn"""
+    if model_name == 'OLS Normal Eq':
+        w = LinearRegression.fit_ols(Phi_train, y_train, bias_is_first=True)
+    elif model_name == 'Ridge':
+        w = LinearRegression.fit_ridge(Phi_train, y_train, lam=best_lam_ridge, bias_is_first=True)
+    elif model_name == 'Lasso':
+        w = LinearRegression.fit_lasso_cd(Phi_train, y_train, lam=best_lam_lasso, num_iters=500, bias_is_first=True)
+        
+    y_pred = LinearRegression.predict(Phi_val, w)
+    metrics_dict = LinearRegression.metrics(y_val, y_pred)
+    return {'RMSE': metrics_dict['RMSE'], 'R2': metrics_dict['R2']}
+def generate_corruption_results_custom(Phi_train, y_train, Phi_val, y_val, best_lam_ridge, best_lam_lasso, continuous_cols_idx):
+    """
+    Args:
+        continuous_cols_idx: list chứa index các cột biến liên tục. 
+                             (Ngăn chặn việc xóa nhầm cột Bias và Categorical).
+    """
+    corruption_levels = [0.1, 0.2, 0.3]
+    imputation_strategies = ['mean', 'median', 'knn']
+    models_list = ['OLS Normal Eq', 'Ridge', 'Lasso']
+    
+    results = []
+    
+    print("Bắt đầu phân tích Feature Corruption...")
+    for level in corruption_levels:
+        for strategy in imputation_strategies:
+            Phi_train_corrupted = Phi_train.copy()
+            np.random.seed(42)  # Cố định random seed để tính toán công bằng
+            
+            # Xóa ngẫu nhiên CHỈ TRÊN các cột biến liên tục (continuous_cols_idx)
+            for col in continuous_cols_idx:
+                mask = np.random.rand(Phi_train.shape[0]) < level
+                Phi_train_corrupted[mask, col] = np.nan
+                
+            # Nội suy (Imputation) 
+            if strategy in ['mean', 'median']:
+                imputer = SimpleImputer(strategy=strategy)
+            elif strategy == 'knn':
+                imputer = KNNImputer(n_neighbors=5)
+                
+            Phi_train_imputed = imputer.fit_transform(Phi_train_corrupted)
+            Phi_val_imputed = imputer.transform(Phi_val) 
+            
+            # Đánh giá Performance
+            for m_name in models_list:
+                metrics = evaluate_custom_corruption(
+                    Phi_train_imputed, y_train, Phi_val_imputed, y_val, 
+                    m_name, best_lam_ridge, best_lam_lasso
+                )
+                
+                results.append({
+                    'Corruption Level': f"{int(level * 100)}%",
+                    'Imputation': strategy,
+                    'Model': m_name,
+                    'RMSE': metrics['RMSE'],
+                    'R2': metrics['R2']
+                })
+                
+    print("Hoàn thành quá trình mô phỏng & nội suy!")
+    return pd.DataFrame(results)
+def plot_corruption_summary(df_results):
+    fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+    
+    for i, metric in enumerate(['RMSE', 'R2']):
+        sns.barplot(data=df_results, x='Corruption Level', y=metric, hue='Imputation', ax=axes[i], palette='viridis')
+        th = "Càng Thấp Càng Tốt" if metric == 'RMSE' else "Càng Cao Càng Tốt"
+        axes[i].set_title(f'Tác động của Xóa Dữ liệu lên {metric}\n({th})', fontsize=14)
+        axes[i].set_ylabel(metric)
+        axes[i].legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        
     plt.tight_layout()
     plt.show()
