@@ -1,0 +1,173 @@
+\section{Tổng kết}
+
+\subsection{Khả năng tái hiện thí nghiệm}
+
+Để các thí nghiệm có thể chạy lại và cho kết quả ổn định, quy trình thực nghiệm được thiết kế theo hướng ưu tiên tính tái hiện. Các điểm chính được tóm tắt như sau:
+
+\begin{itemize}[labelsep=10pt, leftmargin=1.8cm]
+    \item \textbf{Cố định yếu tố ngẫu nhiên:} nhiều hàm trong mã nguồn đã sử dụng seed cố định, chủ yếu là 42 hoặc 0. Điều này giúp việc chia mẫu, tạo bootstrap sample, thêm nhiễu và lựa chọn một số tham số ngẫu nhiên được giữ ổn định giữa các lần chạy.
+
+    \item \textbf{Theo dõi quá trình huấn luyện:} các mô hình lặp đều lưu lại lịch sử loss và thời gian theo từng vòng lặp. Nhờ đó, diễn biến tối ưu hóa có thể được kiểm tra lại thay vì chỉ xem kết quả cuối cùng.
+
+    \item \textbf{Tái tạo được các fold đánh giá:} quy trình cross-validation theo chuỗi thời gian sinh trực tiếp các chỉ số train và validation cho từng fold theo kiểu expanding window. Vì vậy, về mặt kỹ thuật, các thí nghiệm có thể được chạy lại với đúng cách chia dữ liệu ban đầu.
+
+    \item \textbf{Có hỗ trợ ghi nhận metric và chi phí tính toán:} mã nguồn đã có các hàm tổng hợp kết quả theo từng fold, so sánh mô hình, đo thời gian huấn luyện và ước lượng bộ nhớ sử dụng. Đây là nền tảng quan trọng để đối chiếu kết quả giữa các lần chạy.
+
+    \item \textbf{Hoàn thiện thông tin tái hiện:} hệ thống đã có cơ chế lưu split indices và metric của từng fold để phục vụ đối chiếu kết quả giữa các lần chạy. Bên cạnh đó, thí nghiệm cũng đã ghi nhận thời gian thực thi và mức RAM sử dụng nhiều nhất, đồng thời cung cấp file \texttt{requirements.txt} và chỉ rõ môi trường chạy với Python 3.12.7 để bảo đảm khả năng tái lập.
+\end{itemize}
+
+\noindent\textcolor{infocolor}{\textbf{Thời gian chạy và bộ nhớ sử dụng cho các thuật toán trong bài toán hồi quy}}
+
+Để minh họa rõ hơn chi phí tính toán của các thí nghiệm hồi quy, Bảng~\ref{tab:regression_runtime_memory} tổng hợp thời gian thực thi và mức bộ nhớ cực đại được ghi nhận đối với các thuật toán và kịch bản thực nghiệm chính.
+
+\begin{table}[H]
+    \centering
+    \caption{Thời gian thực thi và bộ nhớ cực đại của các thuật toán trong bài toán hồi quy}
+    \label{tab:regression_runtime_memory}
+    \renewcommand{\arraystretch}{1.25}
+    \setlength{\tabcolsep}{5pt}
+    \resizebox{\textwidth}{!}{%
+    \begin{tabular}{|c|l|c|c|}
+        \hline
+        \textbf{STT} & \textbf{Thuật toán} & \textbf{Thời gian chạy (s)} & \textbf{Peak Memory (MB)} \\
+        \hline
+        1 & OLS (Normal Equations) & 0.0126 & 0.1242 \\
+        2 & Mini-batch GD (Step Decay) & 3.0999 & 8.8872 \\
+        3 & Mini-batch GD (Cosine Annealing) & 2.8098 & 8.8858 \\
+        4 & WLS & 0.7141 & 1460.1086 \\
+        5 & Ridge CV (Grid Search) & 606.1863 & 8.2526 \\
+        6 & Lasso CD CV (Grid Search) & 606.1863 & 8.2526 \\
+        7 & Ridge Path (50 lambdas) & 197.2806 & 4.3265 \\
+        8 & Lasso CD Path (50 lambdas) & 197.2806 & 4.3265 \\
+        9 & Elastic Net CV (2D Grid) & 1212.9805 & 7.9247 \\
+        10 & Feature Selection (Forward) & 0.9970 & 3.6355 \\
+        11 & Feature Selection (Backward) & 0.8478 & 4.2765 \\
+        12 & Lasso CD (Feature Selection) & 11.0622 & 4.2808 \\
+        13 & Ridge (Selected Features) & 0.0015 & 0.1220 \\
+        14 & Lasso CD (Selected Features) & 1.0856 & 2.6994 \\
+        15 & Elastic Net (Selected Features) & 0.4444 & 2.6996 \\
+        16 & Sigmoid Basis + Ridge (Task 1) & 0.0117 & 1.2703 \\
+        17 & Basis Validation Curves (Poly/RBF/Sigmoid/Spline) & 3.0262 & 202.4345 \\
+        18 & Basis Function Ablation Study & 1.2165 & 135.2658 \\
+        19 & Feature Group Ablation Study & 2.0193 & 111.4732 \\
+        20 & Bayesian LR - Posterior (1D RBF) & 0.0215 & 4.7510 \\
+        21 & Bayesian LR - Predictive (1D RBF) & 0.0019 & 0.7019 \\
+        22 & Ridge Regression (vs Bayesian, 1D) & 0.0020 & 0.1124 \\
+        23 & Bayesian LR - Posterior (39 features) & 0.0057 & 4.3476 \\
+        24 & Bayesian LR - Predictive (39 features) & 0.0020 & 1.8945 \\
+        25 & Ridge Regression (vs Bayesian, 39 feat.) & 0.0043 & 0.1442 \\
+        26 & KRR - Bandwidth CV (RBF) & 644.1174 & 3845.1399 \\
+        27 & Linear Ridge Baseline (KRR section) & 0.0275 & 0.1505 \\
+        28 & KRR (RBF Kernel) & 52.2808 & 4679.0899 \\
+        29 & KRR (Polynomial Kernel) & 63.2833 & 4684.0802 \\
+        30 & GP - Hyperparameter Optimization & 1299.0181 & 2746.6523 \\
+        31 & GP - Posterior Predictive (test) & 28.3901 & 1774.7480 \\
+        32 & Sensitivity Analysis (OLS vs IRLS-Huber) & 93.7370 & 2917.0987 \\
+        33 & Bias-Variance Decomposition (Bootstrap) & 52.3395 & 18.0270 \\
+        \hline
+    \end{tabular}%
+    }
+\end{table}
+
+\begin{warningbox}{Đánh giá phân tích}
+\begin{itemize}[labelsep=10pt, leftmargin=1.8cm]
+    \item \textbf{Các mô hình tuyến tính cơ bản có chi phí thấp nhất:} OLS và Ridge trên tập đặc trưng đã chọn có thời gian chạy rất nhỏ và mức bộ nhớ tiêu thụ gần như không đáng kể. Điều này cho thấy các mô hình tuyến tính vẫn là lựa chọn hiệu quả khi ưu tiên tốc độ và tính đơn giản.
+
+    \item \textbf{Các bước tìm kiếm siêu tham số là phần tốn thời gian nhất:} Elastic Net CV, Ridge CV, Lasso CV, KRR với bước Bandwidth CV và đặc biệt là GP Hyperparameter Optimization đều có thời gian chạy rất lớn. Vì vậy, chi phí tính toán trong thực nghiệm không chỉ đến từ bản thân mô hình mà còn đến từ quá trình chọn siêu tham số.
+
+    \item \textbf{Kernel methods và Gaussian Process tiêu tốn bộ nhớ rất cao:} KRR với RBF kernel, KRR với polynomial kernel, Gaussian Process và phân tích độ nhạy OLS--IRLS-Huber đều có peak memory ở mức rất lớn. Điều này phản ánh đặc trưng chung của các phương pháp phải thao tác trên ma trận kernel hoặc ma trận kích thước lớn.
+
+    \item \textbf{Có sự đánh đổi rõ giữa độ phức tạp mô hình và tài nguyên tính toán:} các thí nghiệm ablation, validation curves và các mô hình Bayes có thể mang lại thêm thông tin phân tích, nhưng đổi lại cần nhiều thời gian và bộ nhớ hơn so với các mô hình hồi quy cơ sở. Vì vậy, khi mở rộng thực nghiệm, cần cân nhắc giữa giá trị phân tích thu được và chi phí tài nguyên.
+\end{itemize}
+\end{warningbox}
+
+\noindent\textcolor{infocolor}{\textbf{Thời gian chạy và bộ nhớ sử dụng cho các thuật toán trong bài toán phân lớp}}
+
+Tương tự bài toán hồi quy, Bảng~\ref{tab:classification_runtime_memory} tổng hợp thời gian thực thi và mức bộ nhớ cực đại của các mô hình phân lớp và các thí nghiệm mở rộng.
+
+\begin{table}[H]
+    \centering
+    \caption{Thời gian thực thi và bộ nhớ cực đại của các thuật toán trong bài toán phân lớp}
+    \label{tab:classification_runtime_memory}
+    \renewcommand{\arraystretch}{1.25}
+    \setlength{\tabcolsep}{5pt}
+    \resizebox{\textwidth}{!}{%
+    \begin{tabular}{|c|l|c|c|}
+        \hline
+        \textbf{STT} & \textbf{Thuật toán} & \textbf{Thời gian chạy (s)} & \textbf{Peak Memory (MB)} \\
+        \hline
+        1 & Binary LR (Gradient Descent) & 0.6540 & 1.8837 \\
+        2 & Binary LR (Newton-Raphson / IRLS) & 0.0815 & 1.8488 \\
+        3 & Multiclass LR - OvR (Newton) & 1.2319 & 1.9291 \\
+        4 & Multiclass LR - OvO (Newton) & 0.8498 & 2.9823 \\
+        5 & Multiclass LR - Softmax (GD) & 2.6866 & 2.5242 \\
+        6 & Linear Discriminant Analysis (LDA) & 0.0152 & 2.4099 \\
+        7 & Quadratic Discriminant Analysis (QDA) & 0.0071 & 2.4018 \\
+        8 & Perceptron (OvO) & 14.5219 & 2.6763 \\
+        9 & LR - Stratified K-Fold Grid Search (CV) & 45.8588 & 3.1550 \\
+        10 & LR - L1 Sparsity Check & 0.8911 & 0.6242 \\
+        11 & LR - L2 Sparsity Check & 0.9534 & 0.6232 \\
+        12 & Final Best LR (OvR, Best Hyperparams) & 2.2947 & 0.6885 \\
+        13 & Comprehensive K-Fold CV (All Models) & 88.0330 & 4.7724 \\
+        14 & Logit (Binary LR, Newton) & 0.2208 & 1.8526 \\
+        15 & Probit Regression (GD) & 3.3615 & 1.9447 \\
+        16 & Noise Robustness Evaluation (Logit + Probit) & 39.1379 & 2.0819 \\
+        17 & Bayesian LR (Laplace Approximation) & 1.6064 & 566.6870 \\
+        18 & Bayesian LR - OOD Inference & 0.0090 & 0.0268 \\
+        19 & Bayesian LR - 2D PCA Decision Boundary & 1.0416 & 563.9754 \\
+        20 & Linear Logistic Regression (XOR) & 0.0208 & 0.0473 \\
+        21 & Kernel Logistic Regression - RBF (XOR) & 0.3460 & 3.6637 \\
+        22 & Gaussian Naive Bayes & 0.0087 & 2.4027 \\
+        23 & Linear Discriminant Analysis (LDA) & 0.0112 & 2.4096 \\
+        \hline
+    \end{tabular}%
+    }
+\end{table}
+
+\begin{warningbox}{Đánh giá phân tích cho bài toán phân lớp}
+\begin{itemize}[labelsep=10pt, leftmargin=1.8cm]
+    \item \textbf{Các mô hình cổ điển có chi phí tính toán thấp:} LDA, QDA, Gaussian Naive Bayes và Binary Logistic Regression với Newton đều có thời gian chạy rất nhỏ, trong khi mức bộ nhớ sử dụng vẫn ở mức thấp. Điều này cho thấy các mô hình phân lớp cổ điển vẫn rất phù hợp cho các bài toán chuẩn khi cần tốc độ xử lý cao.
+
+    \item \textbf{Cross-validation và đánh giá toàn diện là phần tốn thời gian nhất:} Stratified K-Fold Grid Search, Noise Robustness Evaluation và đặc biệt là Comprehensive K-Fold CV (All Models) có thời gian chạy lớn hơn đáng kể so với quá trình huấn luyện một mô hình đơn lẻ. Vì vậy, chi phí chính trong bài toán phân lớp đến nhiều từ giai đoạn đánh giá và lựa chọn mô hình.
+
+    \item \textbf{Bayesian Logistic Regression tiêu tốn bộ nhớ vượt trội:} hai thí nghiệm Bayesian LR dùng Laplace Approximation và vẽ decision boundary 2D PCA có peak memory rất cao so với phần còn lại. Điều này phản ánh chi phí lưu trữ và thao tác trên các ma trận Hessian hay hiệp phương sai hậu nghiệm trong xấp xỉ Bayes.
+
+    \item \textbf{Kernel methods làm tăng chi phí nhưng mở rộng được năng lực biểu diễn:} Kernel Logistic Regression trên bài toán XOR có thời gian và bộ nhớ cao hơn đáng kể so với Logistic Regression tuyến tính. Đây là minh họa rõ cho sự đánh đổi giữa khả năng mô hình hóa quan hệ phi tuyến và chi phí tính toán.
+\end{itemize}
+\end{warningbox}
+
+\subsection{Kết luận chung và hướng phát triển}
+
+\noindent\textcolor{infocolor}{\textbf{1. Kết luận chung}}
+
+Đồ án đã hoàn thành mục tiêu nghiên cứu và triển khai các thuật toán học máy có giám sát trên hai nhóm bài toán cốt lõi là hồi quy và phân lớp, đồng thời giữ đúng định hướng quan trọng của đề tài là cài đặt thuật toán từ đầu dựa trên công thức toán học thay vì phụ thuộc trực tiếp vào các mô hình huấn luyện có sẵn trong thư viện. Cách tiếp cận này giúp nhóm không chỉ xây dựng được một hệ thống thực nghiệm tương đối đầy đủ mà còn hiểu rõ hơn bản chất của từng mô hình, từ giả thiết xác suất, hàm mất mát, cơ chế tối ưu hóa đến khả năng tổng quát hóa trên dữ liệu mới.
+
+Có thể tóm tắt các kết quả chính như sau:
+\begin{itemize}[labelsep=10pt, leftmargin=1.8cm]
+    \item \textbf{Về hồi quy:} đồ án đã khảo sát từ mô hình tuyến tính cơ sở đến các mở rộng quan trọng như regularization, lựa chọn đặc trưng, basis functions phi tuyến, hồi quy Bayesian, Evidence Maximization, Kernel Ridge Regression và Gaussian Process Regression. Kết quả thực nghiệm cho thấy mô hình đơn giản nhưng được regularization và đánh giá chéo tốt nhiều khi đạt sự cân bằng hợp lý hơn giữa độ chính xác, tính ổn định và chi phí tính toán.
+
+    \item \textbf{Về phân lớp:} đồ án đã triển khai và đối chiếu nhiều nhóm mô hình như Logistic Regression, LDA, QDA, Perceptron, Probit, Bayesian Logistic Regression, Kernel Logistic Regression và Gaussian Naive Bayes. Các thí nghiệm cho thấy mô hình tuyến tính có tính giải thích cao và chi phí thấp, trong khi các mô hình kernel hoặc Bayes mở rộng được năng lực biểu diễn và cung cấp thêm thông tin về độ bất định, nhưng phải đánh đổi bằng tài nguyên tính toán lớn hơn.
+
+    \item \textbf{Về thực nghiệm và phân tích:} đồ án không chỉ dừng ở việc báo cáo metric cuối cùng mà còn mở rộng sang cross-validation, kiểm định thống kê, learning curves, residual analysis, phân tích lỗi, đánh giá robustness, thay đổi tỉ lệ train/test và đo chi phí tính toán. Điều này giúp các kết luận rút ra có độ tin cậy cao hơn và làm tăng giá trị học thuật cũng như khả năng tái hiện của báo cáo.
+
+    \item \textbf{Về ý nghĩa chung:} hai bài toán hồi quy và phân lớp tuy khác nhau ở dạng đầu ra và cách đánh giá, nhưng có liên hệ chặt chẽ về mặt lý thuyết thông qua khung mô hình tuyến tính tổng quát, regularization, maximum likelihood, maximum a posteriori và kernel trick. Việc đặt hai bài toán trong cùng một đồ án giúp làm rõ mối liên hệ giữa các phương pháp học có giám sát một cách hệ thống.
+\end{itemize}
+
+Nhìn chung, đồ án đã đạt được mục tiêu đề ra cả về chiều rộng lẫn chiều sâu: vừa xây dựng được một tập hợp mô hình học có giám sát tương đối đầy đủ, vừa tạo ra một khung thực nghiệm có tính phân tích, đối chiếu và tái hiện tốt. Đây là nền tảng vững chắc để tiếp tục nghiên cứu các mô hình học máy nâng cao hơn trong tương lai.
+
+\noindent\textcolor{infocolor}{\textbf{2. Hướng phát triển}}
+
+Trong thời gian tới, đồ án có thể được mở rộng theo một số hướng chính sau:
+\begin{itemize}[labelsep=10pt, leftmargin=1.8cm]
+    \item \textbf{Mở rộng mô hình:} bổ sung các phương pháp mạnh hơn như SVM, cây quyết định, ensemble methods hoặc mạng nơ-ron nhiều tầng để so sánh với các mô hình hiện tại trong cùng một khung đánh giá.
+
+    \item \textbf{Cải thiện đặc trưng và tối ưu hóa:} làm giàu đặc trưng bằng lag features, rolling statistics hoặc dữ liệu ngoại vi; đồng thời bổ sung các chiến lược tối ưu và điều chỉnh siêu tham số tự động để cải thiện tốc độ hội tụ và chất lượng nghiệm.
+
+    \item \textbf{Mở rộng thực nghiệm:} tăng quy mô dữ liệu, xây dựng thêm các kịch bản nhiễu phức tạp hơn và đo đạc tài nguyên thực tế chi tiết hơn để phân tích rõ hơn sự đánh đổi giữa hiệu năng và chi phí tính toán.
+
+    \item \textbf{Hướng tới ứng dụng:} đóng gói toàn bộ pipeline hiện tại thành một hệ thống trực quan hơn, chẳng hạn dashboard hoặc module đánh giá tự động, nhằm hỗ trợ tốt hơn cho mục tiêu học tập, trình bày và tái sử dụng trong các đồ án tiếp theo.
+\end{itemize}
+
+Các hướng mở rộng này phù hợp với tinh thần của đồ án: vừa đào sâu lý thuyết, vừa hướng tới khả năng triển khai thực tế và so sánh có kiểm chứng trên các bài toán học máy có giám sát.
+
+\clearpage

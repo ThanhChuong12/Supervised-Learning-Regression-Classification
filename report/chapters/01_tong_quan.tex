@@ -1,0 +1,128 @@
+\section{Giới thiệu tổng quan}
+
+\subsection{Mục tiêu đồ án}
+
+Đồ án này nhằm mục đích nghiên cứu và triển khai các thuật toán học máy có giám sát (Supervised Learning) trên hai bài toán chính: \textbf{Hồi quy (Regression)} và \textit{Phân lớp (Classification)}. Điểm đặc biệt của đồ án là tất cả các thuật toán học máy đều được \textbf{cài đặt từ đầu} dựa trên các công thức toán học cơ bản, không sử dụng các hàm có sẵn từ thư viện học máy, nhằm hiểu sâu về bản chất toán học và cơ chế hoạt động của từng thuật toán.
+
+\subsection{Môi trường và công cụ sử dụng}
+
+\subsubsection{Ngôn ngữ lập trình và IDE}
+\begin{itemize}
+    \item \textbf{Ngôn ngữ:} Python 3.x
+    \item \textbf{Môi trường phát triển:} Jupyter Notebook
+\end{itemize}
+
+\subsubsection{Thư viện và Framework}
+
+\textbf{1. Thư viện xử lý dữ liệu và tính toán khoa học:}
+\begin{itemize} [labelsep=10pt, leftmargin=2cm]
+    \item \textbf{NumPy:} Thư viện cốt lõi cho tính toán ma trận và đại số tuyến tính. Được sử dụng để:
+    \begin{itemize}
+        \item Cài đặt các phép toán ma trận (matrix multiplication, transpose, inverse)
+        \item Tính toán gradient và Hessian matrix
+        \item Xử lý vectorization để tối ưu hiệu năng
+    \end{itemize}
+    
+    \item \textbf{Pandas:} Framework xử lý dữ liệu dạng bảng (tabular data). Được sử dụng cho:
+    \begin{itemize}
+        \item Data loading và parsing từ CSV
+        \item Data manipulation (filtering, grouping, aggregation)
+        \item Exploratory Data Analysis (EDA)
+    \end{itemize}
+    
+    \item \textbf{SciPy:} Thư viện tính toán khoa học nâng cao. Được sử dụng cho:
+    \begin{itemize}
+        \item Statistical tests (Breusch-Pagan test cho heteroscedasticity)
+        \item Numerical optimization utilities
+        \item Signal processing (Savitzky-Golay filter cho time-series smoothing)
+    \end{itemize}
+\end{itemize}
+
+\textbf{2. Thư viện trực quan hóa:}
+\begin{itemize} [labelsep=10pt, leftmargin=2cm]
+    \item \textbf{Matplotlib:} Thư viện vẽ biểu đồ cơ bản, được sử dụng cho:
+    \begin{itemize}
+        \item Plotting loss curves và convergence analysis
+        \item Scatter plots và residual plots
+        \item Customizable figure layouts
+    \end{itemize}
+    
+    \item \textbf{Seaborn:} High-level visualization library built on Matplotlib:
+    \begin{itemize}
+        \item Correlation heatmaps
+        \item Distribution plots (histograms, KDE)
+        \item Statistical visualization (boxplots, violin plots)
+    \end{itemize}
+\end{itemize}
+
+\textbf{3. Scikit-learn (Sử dụng hạn chế):}
+\begin{itemize} [labelsep=10pt, leftmargin=2cm]
+    \item \textbf{Preprocessing utilities:}
+    \begin{itemize}
+        \item \texttt{StandardScaler}: Chuẩn hóa dữ liệu (z-score normalization)
+        \item \texttt{PowerTransformer}: Box-Cox transformation cho dữ liệu skewed
+        \item \texttt{train\_test\_split}: Chia tập dữ liệu
+    \end{itemize}
+    
+    \item \textbf{Evaluation metrics:}
+    \begin{itemize}
+        \item \texttt{accuracy\_score}, \texttt{classification\_report}
+        \item \texttt{confusion\_matrix}
+    \end{itemize}
+    
+    \item \textbf{Lưu ý:} Scikit-learn \textbf{KHÔNG} sử dụng cho bất kỳ thuật toán học máy nào (regression models, classification models). Tất cả các thuật toán đều được cài đặt thủ công trong module \texttt{utils.py}.
+\end{itemize}
+
+\subsection{Phân công nhiệm vụ và mức độ đóng góp}
+\newlist{tableitemize}{itemize}{1}
+\setlist[tableitemize]{
+    label=\textbullet, 
+    leftmargin=1.2em, 
+    nosep, 
+    before=\vspace{-0.5\baselineskip},
+    after=\vspace{0.2\baselineskip} 
+}
+
+\begin{center}
+    \newcounter{memberrow} 
+    \setcounter{memberrow}{0}
+    \renewcommand{\arraystretch}{1.4}
+    
+    \begin{tabularx}{\textwidth}{|>{\stepcounter{memberrow}\thememberrow}c|p{3.5cm}|c|X|c|}
+        \hline
+        \multicolumn{1}{|c|}{\textbf{STT}} & \centering\textbf{Họ và tên} & \textbf{MSSV} & \centering\textbf{Nhiệm vụ chính} & \textbf{Đóng góp} \\
+        \hline
+        & Lê Hà Thanh Chương & 23120195 & 
+        \begin{tableitemize}
+            \item Tiền xử lý dữ liệu (EDA)
+            \item Viết báo cáo phần Hồi quy
+            \item Kiểm định Breusch-Pagan
+        \end{tableitemize} & 100\% \\ \hline
+        & Trà Văn Sỹ & 23120197 & 
+        \begin{tableitemize}
+            \item Triển khai Logistic Regression
+            \item Tối ưu Gradient Descent
+            \item Xử lý Missing values
+        \end{tableitemize} & 100\% \\ \hline
+        & Huỳnh Đức Thịnh & 23120199 & 
+        \begin{tableitemize}
+            \item Xây dựng mô hình LDA/QDA
+            \item Vẽ biểu đồ ROC/AUC
+            \item McNemar's test
+        \end{tableitemize} & 100\% \\ \hline
+        & Bùi Trung Hiếu & 23120257 & 
+        \begin{tableitemize}
+            \item Nghiên cứu Regularization
+            \item Lựa chọn đặc trưng
+            \item Validation curve
+        \end{tableitemize} & 100\% \\ \hline
+        & Lê Công Phúc & 23120330 & 
+        \begin{tableitemize}
+            \item Tổng kết mô hình phi tuyến
+            \item Ablation study
+            \item Khả năng tái hiện thí nghiệm
+        \end{tableitemize} & 100\% \\ \hline
+    \end{tabularx}
+\end{center}
+
+\clearpage
