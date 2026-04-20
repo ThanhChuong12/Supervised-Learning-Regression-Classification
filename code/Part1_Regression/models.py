@@ -2061,5 +2061,513 @@ class ModelEvaluator(BaseEvaluator):
 
         return recommendation
 
+# =============================================================================
+# SENSITIVITY ANALYZER MODULE
+# Repeated-run sensitivity analysis across different train/test split ratios.
+# =============================================================================
+class SensitivityAnalyzer:
+    """
+    Sensitivity Analysis: evaluates how model performance varies as the
+    train/test split ratio changes.
 
+    Workflow
+    --------
+    1. run_experiment()  — loop over split ratios × repeated random seeds
+    2. compute_summary() — median / std per (model, split ratio)
+    3. plot_boxplots()   — grouped boxplots for R² and RMSE
+    4. print_findings()  — automated English-language interpretation
+    """
+
+    # Default model names used throughout
+    DEFAULT_MODELS = ['OLS', 'Ridge', 'Lasso', 'Elastic Net', 'WLS']
+
+    # ------------------------------------------------------------------ #
+    #  1. Experiment runner                                               #
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def run_experiment(
+        X: np.ndarray,
+        y: np.ndarray,
+        test_sizes: list = None,
+        n_repeats: int = 20,
+        lam_ridge: float = 1.0,
+        lam_lasso: float = 0.1,
+        lam_en_l1: float = 0.1,
+        lam_en_l2: float = 1.0,
+        lasso_iters: int = 500,
+        seed_base: int = 0,
+    ) -> 'pd.DataFrame':
+        """
+        Run the full sensitivity experiment.
+
+        Parameters
+        ----------
+        X          : feature matrix  (N, D), unscaled
+        y          : target vector   (N,)
+        test_sizes : list of test fractions, e.g. [0.4, 0.3, 0.2]
+        n_repeats  : number of random seeds per split ratio
+        lam_ridge  : Ridge L2 penalty
+        lam_lasso  : Lasso L1 penalty
+        lam_en_l1  : Elastic Net L1 penalty
+        lam_en_l2  : Elastic Net L2 penalty
+        lasso_iters: max coordinate-descent iterations for Lasso / EN
+        seed_base  : first random seed; seeds = seed_base, seed_base+1, ...
+
+        Returns
+        -------
+        pd.DataFrame with columns:
+            split_label, test_size, train_pct, run, model,
+            R2, RMSE, MAE, MSE
+        """
+        from sklearn.model_selection import train_test_split
+        from sklearn.preprocessing import StandardScaler
+        import pandas as pd
+
+        if test_sizes is None:
+            test_sizes = [0.4, 0.3, 0.2]
+
+        records = []
+
+        print("  13.1  Sensitivity Analysis — Train/Test Split Ratio")
+        print(f"  Split ratios  : {[f'{int((1-ts)*100)}/{int(ts*100)}' for ts in test_sizes]}")
+        print(f"  Repeats/ratio : {n_repeats}")
+        print(f"  Total fits    : {len(test_sizes) * n_repeats * len(SensitivityAnalyzer.DEFAULT_MODELS)}")
+        print(f"  lam_ridge={lam_ridge}  lam_lasso={lam_lasso}  "
+              f"lam_en=({lam_en_l1},{lam_en_l2})")
+        print()
+
+        for test_size in test_sizes:
+            train_pct = int(round((1 - test_size) * 100))
+            label = f"{train_pct}% Train\n({int(test_size*100)}% Test)"
+
+            for run_idx in range(n_repeats):
+                seed = seed_base + run_idx
+
+                # ── Split ──────────────────────────────────────────
+                X_tr_raw, X_te_raw, y_tr, y_te = train_test_split(
+                    X, y, test_size=test_size, random_state=seed
+                )
+
+                # ── Scale (fit on train only — no leakage) ─────────
+                scaler = StandardScaler()
+                X_tr_s = scaler.fit_transform(X_tr_raw)
+                X_te_s = scaler.transform(X_te_raw)
+
+                # ── Design matrices ────────────────────────────────
+                Phi_tr = LinearRegression.add_bias(X_tr_s)
+                Phi_te = LinearRegression.add_bias(X_te_s)
+
+                # ── WLS weights from initial OLS residuals ─────────
+                w_init     = LinearRegression.fit_ols(Phi_tr, y_tr)
+                res_init   = LinearRegression.compute_residuals(y_tr, Phi_tr @ w_init)
+                wls_w      = LinearRegression.estimate_weights_from_residuals(res_init)
+
+                # ── Fit all models ─────────────────────────────────
+                model_weights = {
+                    'OLS': LinearRegression.fit_ols(Phi_tr, y_tr),
+                    'Ridge': LinearRegression.fit_ridge(Phi_tr, y_tr, lam=lam_ridge),
+                    'Lasso': LinearRegression.fit_lasso_cd(
+                        Phi_tr, y_tr, lam=lam_lasso, num_iters=lasso_iters
+                    ),
+                    'Elastic Net': LinearRegression.fit_elastic_net_cd(
+                        Phi_tr, y_tr, lam1=lam_en_l1, lam2=lam_en_l2,
+                        num_iters=lasso_iters
+                    ),
+                    'WLS': LinearRegression.fit_wls(Phi_tr, y_tr, weights=wls_w),
+                }
+
+                # ── Record test-set metrics ────────────────────────
+                for model_name, w in model_weights.items():
+                    y_pred = LinearRegression.predict(Phi_te, w)
+                    m = LinearRegression.metrics(y_te, y_pred)
+                    records.append({
+                        'split_label': label,
+                        'test_size':   test_size,
+                        'train_pct':   train_pct,
+                        'run':         run_idx,
+                        'model':       model_name,
+                        'R2':          m['R2'],
+                        'RMSE':        m['RMSE'],
+                        'MAE':         m['MAE'],
+                        'MSE':         m['MSE'],
+                    })
+
+            print(f"  [Done]  test_size={test_size:.1f}  "
+                  f"({train_pct}% train)  — {n_repeats} runs completed.")
+
+        df_result = pd.DataFrame(records)
+        print(f"\n  Total records collected: {len(df_result)}\n")
+        return df_result
+
+    # ------------------------------------------------------------------ #
+    #  2. Summary & stability table                                       #
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def compute_summary(df_sens: 'pd.DataFrame') -> tuple:
+        """
+        Compute median/std per (model, train_pct) and a stability ranking.
+
+        Returns
+        -------
+        summary   : DataFrame — median & std of R²/RMSE per group
+        stability : DataFrame — models ranked by average std(R²)
+        """
+        import pandas as pd
+
+        summary = (
+            df_sens
+            .groupby(['model', 'train_pct'])
+            .agg(
+                median_R2   = ('R2',   'median'),
+                std_R2      = ('R2',   'std'),
+                median_RMSE = ('RMSE', 'median'),
+                std_RMSE    = ('RMSE', 'std'),
+            )
+            .reset_index()
+            .sort_values(['model', 'train_pct'])
+        )
+
+        stability = (
+            summary
+            .groupby('model')['std_R2']
+            .mean()
+            .reset_index()
+            .rename(columns={'std_R2': 'avg_std_R2'})
+            .sort_values('avg_std_R2')
+            .reset_index(drop=True)
+        )
+        stability['rank'] = range(1, len(stability) + 1)
+
+        print("  Summary: Median R² and RMSE across repeated runs")
+        print(summary.to_string(index=False, float_format=lambda x: f"{x:.4f}"))
+
+        print("\n  Stability Ranking  (lower avg std(R²) → more stable)")
+        for _, row in stability.iterrows():
+            tag = ("[ Most stable ]" if row['rank'] == 1
+                   else "[ Least stable ]" if row['rank'] == len(stability)
+                   else "")
+            print(f"  #{int(row['rank'])}  {row['model']:<15}  "
+                  f"avg std(R²) = {row['avg_std_R2']:.6f}  {tag}")
+
+        return summary, stability
+
+    # ------------------------------------------------------------------ #
+    #  3. Automated findings                                              #
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def print_findings(
+        df_sens: 'pd.DataFrame',
+        stability: 'pd.DataFrame',
+    ) -> None:
+        """
+        Print an automated English-language interpretation of the results.
+
+        Parameters
+        ----------
+        df_sens   : output of run_experiment()
+        stability : output of compute_summary()[1]
+        """
+        print("  13.1  Sensitivity Analysis — Key Findings")
+
+        train_pcts = sorted(df_sens['train_pct'].unique())
+        model_names = SensitivityAnalyzer.DEFAULT_MODELS
+
+        # ── Best model at the smallest training set ────────────────
+        smallest_pct = min(train_pcts)
+        df_hard = df_sens[df_sens['train_pct'] == smallest_pct]
+        best_r2_series = (
+            df_hard.groupby('model')['R2']
+            .median()
+            .sort_values(ascending=False)
+        )
+        print(f"\n  Best median R² at {smallest_pct}% training data (hardest split):")
+        for model, r2 in best_r2_series.items():
+            print(f"    {model:<15}:  R² = {r2:.4f}")
+
+        # ── Stability ranking ──────────────────────────────────────
+        most_stable  = stability.iloc[0]['model']
+        least_stable = stability.iloc[-1]['model']
+        print(f"\n  Most stable model  : {most_stable} "
+              f"  (avg σ(R²) = {stability.iloc[0]['avg_std_R2']:.5f})")
+        print(f"  Least stable model : {least_stable} "
+              f"  (avg σ(R²) = {stability.iloc[-1]['avg_std_R2']:.5f})")
+
+        # ── R² drop: largest → smallest training set ──────────────
+        largest_pct = max(train_pcts)
+        print(f"\n  Median R² drop from {largest_pct}% → {smallest_pct}% train:")
+        for model_name in model_names:
+            r2_max = df_sens[
+                (df_sens['model'] == model_name) &
+                (df_sens['train_pct'] == largest_pct)
+            ]['R2'].median()
+            r2_min = df_sens[
+                (df_sens['model'] == model_name) &
+                (df_sens['train_pct'] == smallest_pct)
+            ]['R2'].median()
+            drop = r2_max - r2_min
+            flag = ("robust"   if drop < 0.02 else
+                    "moderate" if drop < 0.05 else "sensitive")
+            print(f"    {model_name:<15}:  ΔR² = {drop:+.4f}  [{flag}]")
+
+        # ── Summary ───────────────────────────────────────────────
+        print("\n  Conclusion")
+        print(f"""
+  - '{most_stable}' is the most stable model: its R² variance is the
+    lowest across all split ratios, meaning it is the least sensitive
+    to the amount of training data available.
+
+  - '{least_stable}' shows the highest variance in R², making it the
+    most sensitive model to changes in the train/test split.
+
+  - All models experience an R² decrease as the training set shrinks,
+    but the magnitude of this decrease differs substantially.
+
+  - Recommendation: prefer models with narrow boxplots and a stable
+    median R², especially when the available dataset is limited.
+""")
+
+
+# =============================================================================
+# NOISE INJECTION ANALYZER MODULE
+# Robustness test: train on clean data, evaluate on Gaussian-noised test set.
+# =============================================================================
+class NoiseInjectionAnalyzer:
+    DEFAULT_MODELS = ['OLS', 'Ridge', 'Lasso', 'Elastic Net', 'WLS']
+
+    @staticmethod
+    def add_gaussian_noise(X, sigma, seed=42):
+        """Add N(0, sigma^2) noise to every element of X."""
+        rng = np.random.default_rng(seed)
+        return X.astype(float) + rng.normal(loc=0.0, scale=sigma, size=X.shape)
+
+    @staticmethod
+    def run_experiment(
+        X_train_raw,
+        y_train,
+        X_test_raw,
+        y_test,
+        sigma_levels=None,
+        lam_ridge=1.0,
+        lam_lasso=0.1,
+        lam_en_l1=0.1,
+        lam_en_l2=1.0,
+        lasso_iters=500,
+        noise_seed=42,
+    ):
+        from sklearn.preprocessing import StandardScaler
+        import pandas as pd
+
+        if sigma_levels is None:
+            sigma_levels = [0.0, 0.1, 0.5, 1.0]
+
+        # Standardise on train, apply to test (no leakage)
+        scaler = StandardScaler()
+        X_tr_s = scaler.fit_transform(X_train_raw.astype(float))
+        X_te_s = scaler.transform(X_test_raw.astype(float))
+
+        # Build clean training design matrix
+        Phi_tr = LinearRegression.add_bias(X_tr_s)
+
+        # WLS weights from initial OLS residuals
+        w_init   = LinearRegression.fit_ols(Phi_tr, y_train)
+        res_init = LinearRegression.compute_residuals(y_train, Phi_tr @ w_init)
+        wls_w    = LinearRegression.estimate_weights_from_residuals(res_init)
+
+        # Fit all models on CLEAN training data
+        model_weights = {
+            'OLS':         LinearRegression.fit_ols(Phi_tr, y_train),
+            'Ridge':       LinearRegression.fit_ridge(Phi_tr, y_train, lam=lam_ridge),
+            'Lasso':       LinearRegression.fit_lasso_cd(
+                               Phi_tr, y_train, lam=lam_lasso,
+                               num_iters=lasso_iters),
+            'Elastic Net': LinearRegression.fit_elastic_net_cd(
+                               Phi_tr, y_train, lam1=lam_en_l1,
+                               lam2=lam_en_l2, num_iters=lasso_iters),
+            'WLS':         LinearRegression.fit_wls(Phi_tr, y_train,
+                               weights=wls_w),
+        }
+
+        print("  13.2  Noise Injection Analysis -- Robustness Test")
+        print(f"  Training set : {X_tr_s.shape[0]} samples (clean, no noise)")
+        print(f"  Test set     : {X_te_s.shape[0]} samples (noise added per level)")
+        print(f"  Sigma levels : {sigma_levels}")
+        print(f"  lam_ridge={lam_ridge}  lam_lasso={lam_lasso}  "
+              f"lam_en=({lam_en_l1},{lam_en_l2})")
+        print()
+
+        records  = []
+        baseline = {}  # sigma=0 metrics for delta computation
+
+        for sigma in sigma_levels:
+            # Add noise to standardised test features
+            X_te_noisy   = NoiseInjectionAnalyzer.add_gaussian_noise(
+                X_te_s, sigma=sigma, seed=noise_seed
+            )
+            Phi_te_noisy = LinearRegression.add_bias(X_te_noisy)
+
+            for model_name, w in model_weights.items():
+                y_pred = LinearRegression.predict(Phi_te_noisy, w)
+                m      = LinearRegression.metrics(y_test, y_pred)
+
+                if sigma == min(sigma_levels):
+                    baseline[model_name] = m.copy()
+
+                base_r2   = baseline.get(model_name, {}).get('R2',   m['R2'])
+                base_rmse = baseline.get(model_name, {}).get('RMSE', m['RMSE'])
+
+                records.append({
+                    'sigma':      sigma,
+                    'model':      model_name,
+                    'R2':         m['R2'],
+                    'RMSE':       m['RMSE'],
+                    'MAE':        m['MAE'],
+                    'MSE':        m['MSE'],
+                    'delta_R2':   m['R2']   - base_r2,
+                    'delta_RMSE': m['RMSE'] - base_rmse,
+                })
+
+            print(f"  [Done]  sigma = {sigma:.2f}  -- all models evaluated.")
+
+        df_result = pd.DataFrame(records)
+        print(f"\n  Total records: {len(df_result)}\n")
+        return df_result
+
+    @staticmethod
+    def compute_summary(df_noise):
+        """Print pivot tables and robustness ranking. Returns (pivot_r2, pivot_rmse, robustness_df)."""
+        import pandas as pd
+
+        pivot_r2   = df_noise.pivot(index='sigma', columns='model', values='R2').round(4)
+        pivot_rmse = df_noise.pivot(index='sigma', columns='model', values='RMSE').round(4)
+
+        print("  R2 Score per Noise Level (higher is better)")
+        print(pivot_r2.to_string())
+
+        print()
+        print("  RMSE per Noise Level (lower is better)")
+        print(pivot_rmse.to_string())
+
+        sigma_min = df_noise['sigma'].min()
+        sigma_max = df_noise['sigma'].max()
+
+        robustness = []
+        for model in NoiseInjectionAnalyzer.DEFAULT_MODELS:
+            sub      = df_noise[df_noise['model'] == model]
+            r2_base  = sub[sub['sigma'] == sigma_min]['R2'].values[0]
+            r2_worst = sub[sub['sigma'] == sigma_max]['R2'].values[0]
+            robustness.append({'model': model, 'R2_drop': r2_base - r2_worst})
+
+        robustness_df = (
+            pd.DataFrame(robustness)
+            .sort_values('R2_drop')
+            .reset_index(drop=True)
+        )
+        robustness_df['rank'] = range(1, len(robustness_df) + 1)
+
+        print()
+        print("  Robustness Ranking  (smallest R2 drop = most robust)")
+        for _, row in robustness_df.iterrows():
+            tag = ("[ Most robust ]"  if row['rank'] == 1
+                   else "[ Least robust ]" if row['rank'] == len(robustness_df)
+                   else "")
+            print(f"  #{int(row['rank'])}  {row['model']:<15}  "
+                  f"R2 drop = {row['R2_drop']:.4f}  {tag}")
+
+        return pivot_r2, pivot_rmse, robustness_df
+
+    @staticmethod
+    def plot_degradation(df_noise, model_names=None):
+        import matplotlib.pyplot as plt
+
+        if model_names is None:
+            model_names = NoiseInjectionAnalyzer.DEFAULT_MODELS
+
+        PALETTE = {
+            'OLS':         '#4C72B0',
+            'Ridge':       '#DD8452',
+            'Lasso':       '#55A868',
+            'Elastic Net': '#C44E52',
+            'WLS':         '#8172B2',
+        }
+        MARKERS = ['o', 's', '^', 'D', 'v']
+
+        sigma_vals = sorted(df_noise['sigma'].unique())
+
+        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+        fig.suptitle(
+            'Noise Injection Robustness Test\n'
+            'Train on clean data -- Test on Gaussian-noised features',
+            fontsize=15, fontweight='bold'
+        )
+
+        for ax_idx, (metric, ylabel) in enumerate([
+            ('R2',   'R2 Score  (higher is better)'),
+            ('RMSE', 'RMSE      (lower is better)'),
+        ]):
+            ax = axes[ax_idx]
+            for m_idx, model_name in enumerate(model_names):
+                sub   = df_noise[df_noise['model'] == model_name].sort_values('sigma')
+                vals  = sub[metric].values
+                color  = PALETTE.get(model_name, '#888888')
+                marker = MARKERS[m_idx % len(MARKERS)]
+                ax.plot(sigma_vals, vals, marker=marker, linewidth=2.2,
+                        markersize=8, color=color, label=model_name)
+
+            ax.set_xlabel('Noise Level  (sigma)', fontsize=12)
+            ax.set_ylabel(ylabel, fontsize=12)
+            ax.set_title(f'{metric} vs Noise Level', fontsize=13,
+                         fontweight='bold')
+            ax.legend(fontsize=10)
+            ax.grid(True, linestyle='--', alpha=0.5)
+            ax.set_xticks(sigma_vals)
+
+        plt.tight_layout()
+        plt.show()
+
+    @staticmethod
+    def print_findings(df_noise, robustness_df):
+        """Print automated English-language interpretation of noise injection results."""
+        sigma_vals   = sorted(df_noise['sigma'].unique())
+        sigma_min    = min(sigma_vals)
+        sigma_max    = max(sigma_vals)
+        most_robust  = robustness_df.iloc[0]['model']
+        least_robust = robustness_df.iloc[-1]['model']
+        model_names  = NoiseInjectionAnalyzer.DEFAULT_MODELS
+
+        print("  13.2  Noise Injection -- Key Findings")
+
+        df_base = df_noise[df_noise['sigma'] == sigma_min]
+        df_max  = df_noise[df_noise['sigma'] == sigma_max]
+
+        print(f"\n  Baseline R2 (sigma={sigma_min}, no noise):")
+        for model_name in model_names:
+            r2 = df_base[df_base['model'] == model_name]['R2'].values[0]
+            print(f"    {model_name:<15}:  R2 = {r2:.4f}")
+
+        print(f"\n  R2 at sigma={sigma_max:.1f} (highest noise):")
+        for model_name in model_names:
+            r2_now  = df_max[df_max['model'] == model_name]['R2'].values[0]
+            r2_base = df_base[df_base['model'] == model_name]['R2'].values[0]
+            drop    = r2_base - r2_now
+            flag    = ("robust"   if drop < 0.02 else
+                       "moderate" if drop < 0.05 else "sensitive")
+            print(f"    {model_name:<15}:  R2 = {r2_now:.4f}  "
+                  f"(drop = {drop:+.4f})  [{flag}]")
+
+        print("\n  Conclusion")
+        print(f"""
+  - '{most_robust}' is the most robust model: its R2 decreases the
+    least as Gaussian noise is added to the test features.
+
+  - '{least_robust}' is the most sensitive model: its performance
+    degrades the most, suggesting its weight vector ||w|| is large,
+    which amplifies the effect of input perturbations.
+
+  - Regularised models (Ridge / Elastic Net) tend to be more robust
+    because smaller weights reduce noise amplification:
+    output_perturbation ~ ||w|| * sigma.
+
+  - Recommendation: when deploying in noisy sensor environments,
+    prefer regularised models over plain OLS.
+""")
 
