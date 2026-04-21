@@ -1361,7 +1361,6 @@ def plot_mcnemar_heatmaps(
     plt.tight_layout()
     plt.show()
 
-
 def evaluate_corruption(X_train, y_train, X_val, y_val, model, task_type='regression'):
     model_clone = deepcopy(model)
     model_clone.fit(X_train, y_train)
@@ -1376,6 +1375,7 @@ def evaluate_corruption(X_train, y_train, X_val, y_val, model, task_type='regres
         f1 = f1_score(y_val, y_pred, average='weighted')
         return {'Accuracy': acc, 'F1': f1}
 
+
 def generate_corruption_results(X_train_num, y_train, X_val_num, y_val, models_dict, task_type='regression'):
     corruption_levels = [0.1, 0.2, 0.3]
     imputation_strategies = ['mean', 'median', 'knn']
@@ -1388,12 +1388,12 @@ def generate_corruption_results(X_train_num, y_train, X_val_num, y_val, models_d
         for strategy in imputation_strategies:
             X_train_corrupted = X_train_np.copy()
             
-            # Tạo mask xóa ngẫu nhiên theo corruption level
+            # Create random mask based on corruption level
             np.random.seed(42)
             mask = np.random.rand(*X_train_np.shape) < level
             X_train_corrupted[mask] = np.nan
             
-            # Nội suy (Imputation)
+            # Imputation
             if strategy in ['mean', 'median']:
                 imputer = SimpleImputer(strategy=strategy)
             elif strategy == 'knn':
@@ -1404,31 +1404,44 @@ def generate_corruption_results(X_train_num, y_train, X_val_num, y_val, models_d
             
             for model_name, model in models_dict.items():
                 metrics = evaluate_corruption(X_train_imputed, y_train, X_val_imputed, y_val, model, task_type)
-                res_row = {'Corruption Level': f"{int(level*100)}%", 'Imputation': strategy, 'Model': model_name}
+                res_row = {
+                    'Corruption Level': f"{int(level*100)}%", 
+                    'Imputation': strategy, 
+                    'Model': model_name
+                }
                 res_row.update(metrics)
                 results.append(res_row)
                 
     return pd.DataFrame(results)
+
 
 def plot_corruption_results(df_results, task_type='regression'):
     metrics = ['RMSE', 'R2'] if task_type == 'regression' else ['Accuracy', 'F1']
     fig, axes = plt.subplots(1, 2, figsize=(15, 6))
     
     for i, metric in enumerate(metrics):
-        sns.barplot(data=df_results, x='Corruption Level', y=metric, hue='Imputation', ax=axes[i], palette='Set2')
+        sns.barplot(
+            data=df_results, 
+            x='Corruption Level', 
+            y=metric, 
+            hue='Imputation', 
+            ax=axes[i], 
+            palette='Set2'
+        )
         
-        # Title linh hoạt để biết thế nào là tốt
-        th = "Lower is better" if metric == 'RMSE' else "Higher is better"
-        axes[i].set_title(f'Corruption effect on {metric}\n({th})', fontsize=13)
+        # Dynamic title to indicate metric interpretation
+        note = "Lower is better" if metric == 'RMSE' else "Higher is better"
+        axes[i].set_title(f'Corruption Effect on {metric}\n({note})', fontsize=13)
         axes[i].set_ylabel(metric)
         axes[i].legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         
     plt.tight_layout()
     plt.show()
 
+
 def plot_convergence_classification(history_dict):
     """
-    history_dict chỉ cần format dạng dictionary mapping Tên Model -> List Loss History:
+    history_dict format: Dictionary mapping Model Name -> Loss History List
     {
         'GD Logistic': gd_model.loss_history,
         'Newton-Raphson': nr_model.loss_history
@@ -1441,18 +1454,24 @@ def plot_convergence_classification(history_dict):
         epochs = range(1, len(loss_history) + 1)
         color = colors[i % len(colors)]
         
-        # Vẽ Training Loss
+        # Plot training loss
         plt.plot(epochs, loss_history, label=f'{name} (Train Loss)', color=color, linewidth=2)
         
-        # Điểm hội tụ
+        # Convergence point
         best_epoch = len(loss_history)
         if best_epoch > 0:
             best_val = loss_history[-1]
             plt.scatter(best_epoch, best_val, color=color, s=70, zorder=5)
-            plt.annotate(f'Converged:\nEpoch {best_epoch}\nLoss: {best_val:.4f}', 
-                         (best_epoch, best_val), textcoords="offset points", xytext=(-20,10), ha='center', color=color)
+            plt.annotate(
+                f'Converged:\nEpoch {best_epoch}\nLoss: {best_val:.4f}', 
+                (best_epoch, best_val), 
+                textcoords="offset points", 
+                xytext=(-20,10), 
+                ha='center', 
+                color=color
+            )
 
-    plt.title('Convergence Analysis on Classification (Training Loss)')
+    plt.title('Convergence Analysis for Classification (Training Loss)')
     plt.xlabel('Epochs / Iterations')
     plt.ylabel('Loss (Cross Entropy)')
     plt.legend()
