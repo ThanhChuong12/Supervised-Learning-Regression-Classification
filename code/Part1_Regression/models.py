@@ -743,7 +743,7 @@ class RobustRegression:
     def fit_irls_huber(Phi, y, delta=1.345, max_iter=50, tol=1e-6, lam=0.0):
         N, D = Phi.shape
 
-        # Bước 0: Khởi tạo bằng OLS (hoặc Ridge nếu lam > 0)
+        # Step 0: Initialize using OLS (or Ridge if lam > 0)
         if lam > 0:
             w = LinearRegression.fit_ridge(Phi, y, lam, bias_is_first=True)
         else:
@@ -752,43 +752,43 @@ class RobustRegression:
         loss_history = []
 
         for iteration in range(max_iter):
-            # 1. Tính phần dư (residuals)
+            # 1. Compute residuals
             y_pred = Phi @ w
             residuals = y - y_pred
 
-            # 2. Tính Huber Loss hiện tại
+            # 2. Compute current Huber Loss
             current_loss = RobustRegression.huber_loss(residuals, delta)
             loss_history.append(current_loss)
 
-            # 3. Tính trọng số IRLS từ Huber
+            # 3. Compute IRLS weights from Huber
             sample_weights = RobustRegression.huber_weights(residuals, delta)
 
-            # 4. Giải bài toán WLS bằng Broadcasting để ngăn tràn RAM (MemoryError)
+            # 4. Solve WLS using broadcasting to avoid memory overflow (MemoryError)
             sqrt_w = np.sqrt(sample_weights)
             Phi_w = Phi * sqrt_w[:, np.newaxis]
             y_w = y * sqrt_w
 
-            # Giải bằng Ridge (hoặc OLS nếu lam=0)
+            # Solve using Ridge (or OLS if lam = 0)
             A = Phi_w.T @ Phi_w
             reg = lam * np.eye(D)
-            reg[0, 0] = 0.0  # Không phạt bias
+            reg[0, 0] = 0.0  # Do not regularize bias
             w_new = np.linalg.solve(A + reg, Phi_w.T @ y_w)
 
-            # 5. Kiểm tra hội tụ
+            # 5. Check convergence
             if np.max(np.abs(w_new - w)) < tol:
                 w = w_new
                 y_pred = Phi @ w
                 residuals = y - y_pred
                 loss_history.append(RobustRegression.huber_loss(residuals, delta))
-                print(f"  IRLS hội tụ sau {iteration + 1} vòng lặp.")
+                print(f"  IRLS converged after {iteration + 1} iterations.")
                 break
 
             w = w_new
         else:
-            print(f"  IRLS chưa hội tụ sau {max_iter} vòng lặp.")
+            print(f"  IRLS did not converge after {max_iter} iterations.")
 
         return w, loss_history
-
+    
     @staticmethod
     def inject_outliers(y, fraction=0.05, multiplier=10, seed=42):
         rng = np.random.default_rng(seed)
@@ -918,7 +918,7 @@ class KernelRegression:
             theta = theta + lr * grad
             lml_history.append(lml)
             iter_time = time.time() - iter_start
-            print(f"Iteration {i+1}/{max_iters} - LML: {lml:.4f} - Thời gian: {iter_time:.4f}s")
+            print(f"Iteration {i+1}/{max_iters} - LML: {lml:.4f} - Time: {iter_time:.4f}s")
 
         return theta, lml_history
 

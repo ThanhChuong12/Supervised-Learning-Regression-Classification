@@ -1443,37 +1443,77 @@ def plot_convergence_classification(history_dict):
     """
     history_dict format: Dictionary mapping Model Name -> Loss History List
     {
-        'GD Logistic': gd_model.loss_history,
-        'Newton-Raphson': nr_model.loss_history
+        'LR - Gradient Descent': gd_model.loss_history,
+        'LR - Newton-Raphson':   nr_model.loss_history
     }
     """
-    plt.figure(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(11, 6))
     colors = ['blue', 'green', 'orange', 'red', 'purple']
-    
-    for i, (name, loss_history) in enumerate(history_dict.items()):
-        epochs = range(1, len(loss_history) + 1)
-        color = colors[i % len(colors)]
-        
-        # Plot training loss
-        plt.plot(epochs, loss_history, label=f'{name} (Train Loss)', color=color, linewidth=2)
-        
-        # Convergence point
-        best_epoch = len(loss_history)
-        if best_epoch > 0:
-            best_val = loss_history[-1]
-            plt.scatter(best_epoch, best_val, color=color, s=70, zorder=5)
-            plt.annotate(
-                f'Converged:\nEpoch {best_epoch}\nLoss: {best_val:.4f}', 
-                (best_epoch, best_val), 
-                textcoords="offset points", 
-                xytext=(-20,10), 
-                ha='center', 
-                color=color
-            )
 
-    plt.title('Convergence Analysis for Classification (Training Loss)')
-    plt.xlabel('Epochs / Iterations')
-    plt.ylabel('Loss (Cross Entropy)')
-    plt.legend()
-    plt.grid(True, linestyle=':', alpha=0.6)
+    convergence_points = []
+
+    for i, (name, loss_history) in enumerate(history_dict.items()):
+        epochs = list(range(1, len(loss_history) + 1))
+        color  = colors[i % len(colors)]
+        ax.plot(epochs, loss_history,
+                label=f'{name} (Train Loss)',
+                color=color, linewidth=2)
+        ax.scatter(len(loss_history), loss_history[-1],
+                   color=color, s=70, zorder=5)
+        convergence_points.append((len(loss_history), loss_history[-1], color, name))
+
+    # --- Annotation dùng tọa độ axes (0–1) để luôn nằm ngoài vùng đường loss ---
+    # Sắp xếp theo epoch tăng dần → điểm epoch nhỏ để phía dưới, epoch lớn phía trên
+    convergence_points_sorted = sorted(convergence_points, key=lambda p: p[0])
+
+    # Vị trí cố định trong axes coordinates: góc dưới-phải và trên-phải
+    # axes fraction: (0,0) = góc dưới trái, (1,1) = góc trên phải
+    fixed_positions = [
+        (0.97, 0.18),   # vị trí 1: góc dưới phải  → epoch nhỏ (Newton–Raphson)
+        (0.97, 0.38),   # vị trí 2: cao hơn         → epoch lớn (GD)
+    ]
+    # Nếu có nhiều hơn 2 mô hình, tự sinh thêm vị trí
+    for k in range(2, len(convergence_points_sorted)):
+        fixed_positions.append((0.97, 0.18 + k * 0.20))
+
+    for idx, (ep, val, color, name) in enumerate(convergence_points_sorted):
+        ax_x, ax_y = fixed_positions[idx]
+        short_name = name.split('(')[0].strip()
+        label_text = f'{short_name}\nEpoch {ep}  |  Loss: {val:.4f}'
+
+        ax.annotate(
+            label_text,
+            # điểm neo = điểm hội tụ thực trên đồ thị
+            xy=(ep, val),
+            xycoords='data',
+            # vị trí text = tọa độ axes cố định
+            xytext=(ax_x, ax_y),
+            textcoords='axes fraction',
+            color=color,
+            fontsize=9,
+            ha='right',
+            va='center',
+            arrowprops=dict(
+                arrowstyle='->',
+                color=color,
+                lw=0.9,
+                connectionstyle='arc3,rad=0.15'
+            ),
+            bbox=dict(
+                boxstyle='round,pad=0.35',
+                facecolor='white',
+                edgecolor=color,
+                linewidth=1.2,
+                alpha=0.92
+            )
+        )
+
+    ax.set_title('Convergence Analysis for Classification (Training Loss)',
+                 fontsize=13, fontweight='bold')
+    ax.set_xlabel('Epochs / Iterations', fontsize=11)
+    ax.set_ylabel('Loss (Cross Entropy)',  fontsize=11)
+    ax.legend(loc='upper right', fontsize=10)
+    ax.grid(True, linestyle=':', alpha=0.6)
+
+    plt.tight_layout()
     plt.show()
