@@ -1,0 +1,577 @@
+\section{Phân tích so sánh và đánh giá}
+
+\subsection{Kết nối giữa hồi quy và phân lớp}
+
+Trong lịch sử phát triển của thống kê, hồi quy tuyến tính (cho dữ liệu liên tục) và phân lớp nhị phân (cho dữ liệu rời rạc) từng được xem là hai bài toán riêng biệt. Tuy nhiên, theo quan điểm toán học hiện đại, cả hai bài toán này đều có chung nguồn gốc và cấu trúc đối xứng. Chúng đều thuộc họ mô hình tuyến tính tổng quát, chỉ khác nhau ở hàm kích hoạt và hàm mất mát.
+
+\subsubsection{Logistic Regression: Bản chất là một hồi quy hàm Sigmoid}
+
+Cách nhìn nhận Logistic Regression đơn thuần như một thuật toán phân lớp đã che khuất đi bản chất hồi quy của nó. Trên thực tế, hồi quy Logistic chính là một bài toán hồi quy tuyến tính trên không gian \textit{log-odds}, sau đó được ánh xạ trở lại không gian xác suất thông qua một hàm phi tuyến.
+
+Thay vì mô hình hóa trực tiếp giá trị trung bình $\mu$ như hồi quy tuyến tính thông thường, Logistic Regression giữ lại thành phần hệ thống là bộ dự báo tuyến tính $\eta = \mathbf{X}\beta$. Sau đó, nó đưa $\eta$ đi qua hàm Logistic Sigmoid:
+\begin{equation}
+    p(Y=1 | \mathbf{x}) = \sigma(\eta) = \frac{1}{1 + e^{-\mathbf{X}\beta}}
+\end{equation}
+
+Hàm Sigmoid đóng vai trò nén dải giá trị vô hạn $(-\infty, +\infty)$ của tổ hợp tuyến tính $\mathbf{X}\beta$ thành một khoảng xác suất hợp lệ trong khoảng $(0, 1)$, từ đó cho phép biểu diễn xác suất $p(Y=1 | \mathbf{x})$.
+
+\begin{notebox}{Sự tương đồng về mặt cấu trúc}
+Mối tương đồng về mặt cấu trúc giữa phân lớp và hồi quy cho thấy rằng phân lớp không phải là một nhiệm vụ hoàn toàn khác biệt so với hồi quy. Cả hồi quy tuyến tính (Linear Regression) và hồi quy logistic (Logistic Regression) đều sử dụng chung một cốt lõi cơ bản, đó là bộ dự báo tuyến tính $\mathbf{X}\beta$. Sự khác biệt chính giữa chúng chỉ nằm ở cách bộ dự báo này được biến đổi để phù hợp với loại biến mục tiêu mà chúng ta đang dự đoán (ví dụ: biến liên tục trong hồi quy tuyến tính, biến phân loại trong hồi quy logistic).
+\end{notebox}
+
+\subsubsection{Generalized Linear Models: Khung kiến trúc thống nhất}
+
+Sự tương đương về mặt cấu trúc giữa hai mô hình trên được chính thức hóa vào năm 1972 bởi công trình nền tảng của Nelder và Wedderburn về mô hình tuyến tính tổng quát (GLM) \cite{nelder1972generalized}. Khung lý thuyết này đã thống nhất cách xử lý dữ liệu liên tục, nhị phân và dữ liệu đếm bằng cách module hóa quá trình mô hình hóa thành ba thành phần biệt lập \cite{ahmed2023comprehensive}:
+
+\begin{enumerate}
+    \item \textbf{Thành phần hệ thống:} Bộ dự báo tuyến tính $\eta = \mathbf{X}\beta$, đại diện cho thông tin trích xuất từ các biến độc lập. Thành phần này bất biến trong mọi mô hình GLM.
+    \item \textbf{Thành phần ngẫu nhiên:} Phân phối xác suất có điều kiện của biến phản hồi $Y$ khi biết $\mathbf{X}$.
+    \item \textbf{Hàm liên kết ($g(\mu) = \eta$):} kết nối giá trị kỳ vọng của biến phản hồi ($\mu = \mathbb{E}[Y]$) với bộ dự báo tuyến tính $\eta$.
+\end{enumerate}
+
+\begin{importantbox}{Linear và Logistic dưới lăng kính GLM}
+Dưới khung kiến trúc thống nhất này, hai thuật toán kinh điển chỉ là hai trường hợp đặc biệt:
+\begin{itemize}
+    \item \textbf{Linear Regression:} Sử dụng phân phối chuẩn (\textit{Gaussian}) cho thành phần ngẫu nhiên và hàm liên kết đồng nhất (\textit{Identity link}: $g(\mu) = \mu$). Vì miền giá trị không bị giới hạn, trung bình $\mu$ được mô hình hóa trực tiếp bằng $\mathbf{X}\beta$.
+    \item \textbf{Logistic Regression:} Sử dụng phân phối \textit{Bernoulli} cho thành phần ngẫu nhiên và hàm liên kết \textit{Logit} ($g(\mu) = \ln(\frac{\mu}{1-\mu})$). Hàm liên kết này ánh xạ xác suất bị giới hạn ra trục số thực, và hàm ngược của nó (Sigmoid) đưa kết quả tuyến tính về lại không gian xác suất.
+\end{itemize}
+\end{importantbox}
+
+\subsubsection{Exponential Family}
+
+Họ hàm mũ là nền tảng cho khả năng hợp nhất các mô hình có vẻ khác nhau. GLM dựa trên đặc tính của họ phân phối này, đóng vai trò là lớp cha bao trùm các thành phần ngẫu nhiên. Cả phân phối Gaussian (dùng cho hồi quy) và Bernoulli/Categorical (dùng cho phân loại) đều thuộc họ hàm mũ. Điều này có nghĩa là, về mặt toán học, hàm mật độ xác suất của chúng có thể được biến đổi để có chung một dạng chuẩn tắc.
+
+\begin{equation}
+    f(y; \theta, \phi) = \exp \left( \frac{y\theta - b(\theta)}{a(\phi)} + c(y, \phi) \right)
+\end{equation}
+
+Trong đó, $\theta$ là tham số chính tắc định hình phân phối, và $b(\theta)$ là hàm sinh moment quyết định trực tiếp đến kỳ vọng và phương sai của hệ thống \cite{wainwright2008graphical}. Sự chia sẻ chung cấu trúc hàm mũ này đã tạo ra sự thống nhất toán học trên hai phương diện sâu sắc:
+
+\vspace{0.5em}
+\noindent\textcolor{lightblue}{\textbf{1. Nguồn gốc của các hàm liên kết chính tắc}}
+\vspace{0.5em}
+
+Mô hình tuyến tính tổng quát (GLM) cho phép chúng ta tìm ra các hàm liên kết phù hợp nhất một cách tự nhiên dựa trên cấu trúc của dữ liệu. Cách này hoạt động bằng cách đặt phần dự đoán tuyến tính của mô hình ngang với tham số tự nhiên ($\eta = \theta$) của phân phối dữ liệu. 
+\begin{itemize}
+    \item Với dữ liệu tuân theo phân phối Gaussian (phân phối chuẩn), khi chúng ta biến đổi nó về dạng hàm mũ, tham số $\theta$ chính là giá trị trung bình ($\mu$). Vì vậy, hàm liên kết Identity là lựa chọn tốt nhất cho hồi quy tuyến tính vì nó trực tiếp sử dụng giá trị trung bình.
+    \item Với dữ liệu tuân theo phân phối Bernoulli (dữ liệu nhị phân), khi chúng ta biến đổi hàm khối xác suất, tham số $\theta$ tự động trở thành $\ln(\frac{p}{1-p})$. Điều này cho thấy hàm liên kết Logit không phải là một lựa chọn ngẫu nhiên mà là cách biểu diễn tham số một cách tự nhiên cho dữ liệu phân loại nhị phân. Nói cách khác, nó phù hợp với bản chất của dữ liệu.
+\end{itemize}
+
+\vspace{0.5em}
+\noindent\textcolor{lightblue}{\textbf{2. Sự thống nhất trong thuật toán tối ưu hóa (IRLS)}}
+\vspace{0.5em}
+
+Các mô hình GLM có thể được huấn luyện bằng một thuật toán duy nhất, đó là thuật toán \textit{bình phương tối thiểu được đánh trọng số lặp (Iteratively Reweighted Least Squares - IRLS)}. Điều này là do các mô hình GLM chia sẻ các đặc tính hình học và tính lồi nghiêm ngặt của hàm log-partition $b(\theta)$ từ exponential family.
+
+\begin{infobox}{Thuật toán tối ưu hóa làm cầu nối}
+Thuật toán này hoạt động bằng cách biến đổi một bài toán tối ưu hóa phức tạp thành một chuỗi các bài toán hồi quy tuyến tính, trong đó mỗi điểm dữ liệu có một trọng số khác nhau. Phương pháp bình phương tối thiểu thông thường (OLS) được sử dụng trong hồi quy tuyến tính thực chất là một trường hợp đặc biệt của thuật toán này, và nó hội tụ ngay lập tức vì trọng số của phân phối Gaussian là một số không đổi.
+\end{infobox}
+
+\subsection{Đánh giá so sánh toàn diện}
+
+Để có cái nhìn tổng quan và định hướng cho việc lựa chọn kiến trúc thuật toán trong thực tiễn, nhóm tiến hành đối sánh toàn bộ các mô hình đã triển khai xuyên suốt đồ án. Các phương pháp được đánh giá trên sáu phương diện cấu trúc: giả thiết toán học cốt lõi, sự tồn tại của nghiệm dạng đóng, độ phức tạp tính toán, khả năng giải thích của trọng số, độ nhạy cảm với điểm ngoại lai và hiệu năng khái quát hóa trên tập dữ liệu thực tế.
+
+Nhằm tối ưu hóa việc đối chiếu, các thuật toán được phân nhóm thành hai bảng tương ứng với hai nhánh bài toán chính: Hồi quy và Phân lớp.
+
+\vspace{0.5em}
+\noindent\textcolor{lightblue}{\textbf{1. Đánh giá nhóm mô hình Hồi quy}}
+\vspace{0.5em}
+
+\setlength\LTleft{-0.6cm}
+\setlength\LTright{0pt}
+\begin{longtable}{|>{\raggedright\arraybackslash}p{2.25cm}|>{\raggedright\arraybackslash}p{2.8cm}|>{\centering\arraybackslash}p{1.4cm}|>{\centering\arraybackslash}p{1.95cm}|>{\centering\arraybackslash}p{1.3cm}|>{\centering\arraybackslash}p{1.3cm}|>{\raggedright\arraybackslash}p{2.7cm}|}
+    \caption{Đánh giá so sánh chi tiết các thuật toán Hồi quy} \\
+    \hline
+    \centering\textbf{Mô hình} & \centering\textbf{Giả thiết phân phối} & \textbf{Nghiệm dạng đóng} & \textbf{Độ phức tạp} & \textbf{Khả năng giải thích} & \textbf{Nhạy ngoại lai} & \centering\arraybackslash\textbf{Hiệu năng thực tế} \\
+    \hline
+    \endfirsthead
+    \hline
+    \centering\textbf{Mô hình} & \centering\textbf{Giả thiết phân phối} & \textbf{Nghiệm dạng đóng} & \textbf{Độ phức tạp} & \textbf{Khả năng giải thích} & \textbf{Nhạy ngoại lai} & \centering\arraybackslash\textbf{Hiệu năng thực tế} \\
+    \hline
+    \endhead
+    \hline
+    \endfoot
+    \hline
+    \endlastfoot
+    \textbf{Hồi quy tuyến tính (OLS)} & Quan hệ tuyến tính. Nhiễu tuân theo phân phối chuẩn. Các biến độc lập không có đa cộng tuyến. & Có & $\mathcal{O}(ND^2 + D^3)$ & Rất cao & Rất cao & Phù hợp làm nền tảng cơ sở. Dễ bị quá khớp và suy biến ma trận khi số chiều đặc trưng lớn. \\
+    \hline
+    \textbf{Hồi quy Ridge (L2)} & Trọng số tuân theo phân phối tiền nghiệm chuẩn. Chấp nhận dữ liệu có đa cộng tuyến nhẹ. & Có & $\mathcal{O}(ND^2 + D^3)$ & Cao & Trung bình & Hoạt động cực kỳ ổn định. Xử lý tốt hiện tượng đa cộng tuyến bằng cách co rút đều các trọng số về gần không. \\
+    \hline
+    \textbf{Hồi quy Lasso (L1)} & Trọng số tuân theo phân phối tiền nghiệm Laplace, ưu tiên tính thưa. & Không & $\mathcal{O}(ND \times iter)$ & Rất cao & Trung bình & Khái quát hóa xuất sắc. Tự động triệt tiêu các đặc trưng nhiễu, đóng vai trò như một cơ sở chọn lọc đặc trưng. \\
+    \hline
+    \textbf{Hồi quy với hàm cơ sở (Đa thức, RBF)} & Mối quan hệ giữa dữ liệu là phi tuyến. Dữ liệu được ánh xạ lên không gian chiều cao hơn. & Có & $\mathcal{O}(NM^2 + M^3)$ & Thấp & Cao & Khớp rất tốt các đường cong phức tạp. Tuy nhiên rủi ro quá khớp vô cùng lớn nếu không kết hợp với điều chuẩn L2. \\
+\end{longtable}
+
+\vspace{0.5em}
+\noindent\textcolor{lightblue}{\textbf{2. Đánh giá nhóm mô hình Phân lớp}}
+\vspace{0.5em}
+
+\setlength\LTleft{-0.6cm}
+\setlength\LTright{0pt}
+\begin{longtable}{|>{\raggedright\arraybackslash}p{2.25cm}|>{\raggedright\arraybackslash}p{2.8cm}|>{\centering\arraybackslash}p{1.4cm}|>{\centering\arraybackslash}p{1.95cm}|>{\centering\arraybackslash}p{1.3cm}|>{\centering\arraybackslash}p{1.3cm}|>{\raggedright\arraybackslash}p{2.7cm}|}
+    \caption{Đánh giá so sánh chi tiết các thuật toán Phân lớp} \\
+    \hline
+    \centering\textbf{Mô hình} & \centering\textbf{Giả thiết phân phối} & \textbf{Nghiệm dạng đóng} & \textbf{Độ phức tạp} & \textbf{Khả năng giải thích} & \textbf{Nhạy ngoại lai} & \centering\arraybackslash\textbf{Hiệu năng thực tế} \\
+    \hline
+    \endfirsthead
+    \hline
+    \centering\textbf{Mô hình} & \centering\textbf{Giả thiết phân phối} & \textbf{Nghiệm dạng đóng} & \textbf{Độ phức tạp} & \textbf{Khả năng giải thích} & \textbf{Nhạy ngoại lai} & \centering\arraybackslash\textbf{Hiệu năng thực tế} \\
+    \hline
+    \endhead
+    \hline
+    \endfoot
+    \hline
+    \endlastfoot
+    \textbf{Hồi quy Logistic (Cơ sở)} & Log-odds là tuyến tính. Các quan trắc độc lập. Phân phối Bernoulli/Categorical. & Không & $\mathcal{O}(ND \times iter)$ & Rất cao & Thấp & Ổn định và hội tụ nhanh (nhờ thuật toán Newton-Raphson). Gặp khó khăn ở các vùng dữ liệu giao thoa mạnh. \\
+    \hline
+    \textbf{Hồi quy Logistic (L1 / L2)} & Giới hạn cấu trúc không gian giả thuyết. Phạt các trọng số dư thừa. & Không & $\mathcal{O}(ND \times iter)$ & Cao & Rất thấp & Xử lý mất cân bằng tốt khi có bù trọng số. L1 giúp mô hình thưa hóa, L2 tăng cường tính bền vững trước nhiễu. \\
+    \hline
+    \textbf{Perceptron} & Dữ liệu phân tách tuyến tính tuyệt đối. & Không & $\mathcal{O}(ND \times iter)$ & Thấp & Cực cao & Phân lớp cứng sắc bén. Hoạt động hoàn hảo trên các cặp phân lớp tách biệt nhưng mất phương hướng khi có độ đan xen. \\
+    \hline
+    \textbf{Phân tích tách lớp tuyến tính (LDA)} & Mỗi lớp tuân theo phân phối chuẩn đa biến. Tất cả dùng chung một ma trận hiệp phương sai. & Có & $\mathcal{O}(ND^2 + D^3)$ & Cao & Cao & Áp đảo về độ chính xác. Khai thác trọn vẹn thông tin từ sự tương quan đa cộng tuyến của dữ liệu cảm biến. \\
+    \hline
+    \textbf{Phân tích tách lớp bậc hai (QDA)} & Phân phối chuẩn đa biến. Mỗi lớp sở hữu một ma trận hiệp phương sai độc lập. & Có & $\mathcal{O}(NKD^2+ KD^3)$ & Trung bình & Rất cao & Khớp ranh giới phi tuyến tốt, tuy nhiên dễ bị quá khớp và thiếu ổn định nếu tập thiểu số thiếu hụt mẫu. \\
+    \hline
+    \textbf{Gaussian Naive Bayes} & Phân phối chuẩn. Các đặc trưng đầu vào hoàn toàn độc lập có điều kiện. & Có & $\mathcal{O}(ND)$ & Cao & Trung bình & Tránh được nghịch đảo ma trận nên tính toán cực nhanh. Bị sụt giảm điểm F1 do giả thiết độc lập bị vi phạm. \\
+    \hline
+    \textbf{Kernel Logistic Regression} & Dữ liệu có thể phân tách tuyến tính trong không gian vô hạn chiều (thông qua hạt nhân RBF). & Không & $\mathcal{O}(N^3 + N^2 \times iter)$ & Rất thấp & Trung bình & Vượt qua rào cản tuyến tính, giải quyết hoàn hảo bài toán có phân bố chéo. Bù lại chi phí tính toán cực kỳ đắt đỏ. \\
+    \hline
+    \textbf{Hồi quy Logistic Bayes} & Trọng số là một phân phối xác suất hậu nghiệm, không phải một điểm vô hướng duy nhất. & Không (Xấp xỉ Laplace) & $\mathcal{O}(ND \times iter + D^3)$ & Cao & Thấp & Không chỉ dự đoán nhãn mà còn cung cấp vùng bất định, giúp mô hình an toàn trước các điểm dữ liệu dị biệt. \\
+\end{longtable}
+
+\vspace{0.5em}
+\noindent\textcolor{lightblue}{\textbf{3. Phân tích sự đánh đổi và kết nối hệ thống}}
+\vspace{0.5em}
+
+Thông qua hai bảng tổng hợp chi tiết, ta nhận thấy việc lựa chọn kiến trúc học máy không bao giờ tồn tại một đáp án hoàn hảo duy nhất. Nó là một chuỗi các sự đánh đổi khắt khe về mặt toán học và cấu trúc:
+
+Thứ nhất, sự đánh đổi giữa giả thiết mô hình và tài nguyên hệ thống. Các mô hình sinh như Gaussian Naive Bayes hy sinh tính chặt chẽ của ma trận tương quan để đổi lấy sự tối giản trong tính toán tuyến tính $\mathcal{O}(ND)$. Ngược lại, mô hình phân tích tách lớp bậc hai hay Kernel Logistic Regression bám sát cấu trúc tương quan phức tạp, chấp nhận chi phí tính toán khổng lồ $\mathcal{O}(D^3)$ hoặc $\mathcal{O}(N^3)$ để đổi lấy ranh giới quyết định phi tuyến linh hoạt.
+
+Thứ hai, sự chuyển dịch giữa nghiệm giải tích và tối ưu lặp. Các phương pháp cực đại hóa hợp lý cơ bản (như hồi quy tuyến tính OLS hay phân tích tách lớp) cung cấp nghiệm dạng đóng với tốc độ phản hồi tức thời. Tuy nhiên, khi hệ thống đòi hỏi các ràng buộc cấu trúc phi tuyến (như L1 tạo tính thưa) hoặc hàm kích hoạt xác suất (như Sigmoid), việc từ bỏ phương trình đóng để thiết lập các thuật toán tối ưu lặp (Gradient Descent, Newton-Raphson) là yêu cầu toán học bắt buộc.
+
+Điểm kết nối cốt lõi và mang tính triết lý nhất giữa toàn bộ các thuật toán trong đồ án chính là tư duy kiểm soát không gian giả thuyết. Bất kể mục tiêu cuối cùng là dự báo lượng khí thải liên tục (hồi quy) hay gán nhãn số người trong phòng (phân lớp), việc áp dụng các cơ chế điều chuẩn L1/L2, sử dụng chiến lược chia để trị, hay tính toán vùng bất định Bayes đều tuân theo nguyên lý giảm thiểu rủi ro cấu trúc. Sự tinh chỉnh này ngăn hệ thống học thuộc lòng tín hiệu nhiễu, duy trì giới hạn chiều Vapnik-Chervonenkis ở mức an toàn, từ đó đảm bảo trạng thái khái quát hóa bền vững khi mô hình đối mặt với luồng dữ liệu mới.
+
+\subsection{Phân tích mức độ nhạy cảm và tính bền vững}
+\subsubsection{Đánh giá qua thay đổi tỷ lệ Train/Test}
+
+Phân tích độ nhạy cảm đánh giá mức độ hiệu năng mô hình thay đổi khi lượng dữ liệu huấn luyện thay đổi.
+Thay vì chạy một lần duy nhất, thí nghiệm lặp lại nhiều lần với hạt giống ngẫu nhiên khác nhau
+để ước lượng phân phối thống kê của hiệu năng, từ đó phân biệt mô hình ổn định với mô hình nhạy cảm.
+
+\vspace{0.5em}
+\noindent\textcolor{lightblue}{\textbf{1. Thiết lập thí nghiệm}}
+\vspace{0.5em}
+
+\begin{itemize}
+    \item \textbf{Tập dữ liệu:} 19.735 mẫu, 39 đặc trưng, biến mục tiêu là lượng tiêu thụ điện năng của thiết bị gia dụng (\textit{Appliances}).
+    \item \textbf{Tỷ lệ phân chia:} Ba mức $\text{test\_size} \in \{0.4,\, 0.3,\, 0.2\}$, tương ứng $60\%$/$70\%$/$80\%$ dữ liệu huấn luyện.
+    \item \textbf{Số lần lặp:} 20 lần với hạt giống ngẫu nhiên khác nhau cho mỗi tỷ lệ (Bootstrap lặp lại), tổng cộng 300 lần huấn luyện.
+    \item \textbf{Các mô hình so sánh:} OLS (Normal Equations), Ridge ($\lambda^* = 719.69$ chọn qua CV), Lasso ($\lambda^* = 1000$ chọn qua CV), Elastic Net ($\lambda_1 = 1000,\, \lambda_2 = 719.69$), WLS (trọng số ước lượng từ phần dư OLS).
+    \item \textbf{Chuẩn hóa:} Tập đặc trưng được chuẩn hóa theo $(\hat{\mu}, \hat{\sigma})$ học hoàn toàn trên tập huấn luyện để tránh rò rỉ dữ liệu.
+    \item \textbf{Chỉ số đánh giá:} Trung vị $R^2$ và độ lệch chuẩn $\sigma(R^2)$ qua 20 lần chạy.
+\end{itemize}
+
+\vspace{0.5em}
+\noindent\textcolor{lightblue}{\textbf{2. Kết quả theo từng tỷ lệ phân chia}}
+\vspace{0.5em}
+
+Bảng~\ref{tab:sensitivity} trình bày trung vị $R^2$ và $\sigma(R^2)$ của mỗi mô hình qua 20 lần chạy
+ở ba tỷ lệ phân chia.
+
+\begin{table}[h]
+\centering
+\caption{Trung vị $R^2$ và độ lệch chuẩn $\sigma(R^2)$ qua 20 lần chạy theo tỷ lệ phân chia.
+Ô đánh dấu ($\dagger$) biểu thị kết quả bất thường do mô hình không ổn định.}
+\label{tab:sensitivity}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccccc}
+\toprule
+& \multicolumn{2}{c}{\textbf{60\% Train}} & \multicolumn{2}{c}{\textbf{70\% Train}} & \multicolumn{2}{c}{\textbf{80\% Train}} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+\textbf{Mô hình} & median $R^2$ & $\sigma(R^2)$ & median $R^2$ & $\sigma(R^2)$ & median $R^2$ & $\sigma(R^2)$ \\
+\midrule
+OLS         & $-0.6113^\dagger$ & $5.49\times10^4$ & $0.2009$ & $1.94\times10^5$ & $0.2019$ & $7.16\times10^2$ \\
+Ridge       & $0.1889$          & $0.0044$         & $0.1937$ & $0.0068$         & $0.1958$ & $0.0095$ \\
+Lasso       & $0.2019$          & $0.0050$         & $0.2043$ & $0.0084$         & $0.2027$ & $0.0112$ \\
+Elastic Net & $0.1878$          & $0.0044$         & $0.1928$ & $0.0067$         & $0.1950$ & $0.0094$ \\
+WLS         & $-0.0054^\dagger$ & $\approx1.77\times10^{27}$ & $0.1834$ & $\approx6.05\times10^{13}$ & $0.1479$ & $\approx2.35\times10^{10}$ \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\textbf{Nhóm mô hình ổn định (Ridge, Lasso, Elastic Net):}
+Ba mô hình có điều chuẩn hóa duy trì $R^2$ ổn định trong khoảng $0.19$--$0.20$
+trên mọi tỷ lệ phân chia, với $\sigma(R^2) < 0.012$ qua 20 lần chạy.
+Lasso đạt $R^2$ trung vị cao nhất ở điều kiện khó nhất ($60\%$ train, $R^2 = 0.2019$).
+Ridge và Elastic Net cho kết quả tương đương.
+
+\textbf{Nhóm mô hình nhạy cảm (OLS, WLS):}
+OLS cho trung vị $R^2 = -0.6113$ ở tỷ lệ 60/40, trong khi cùng mô hình đạt $R^2 \approx 0.20$ ở tỷ lệ 80/20.
+Mức giảm $\Delta R^2 = +0.81$ khi chuyển từ $80\%$ xuống $60\%$ tập huấn luyện bắt nguồn từ việc
+ma trận $\boldsymbol{\Phi}^\top\boldsymbol{\Phi}$ trở nên gần suy biến khi số mẫu thu hẹp,
+khiến nghiệm Normal Equations bùng nổ.
+WLS biểu hiện tương tự với $\Delta R^2 = +0.15$ và phương sai bùng nổ theo bậc $10^{27}$.
+
+\vspace{0.5em}
+\noindent\textcolor{lightblue}{\textbf{3. Xếp hạng độ ổn định}}
+\vspace{0.5em}
+
+Bảng~\ref{tab:sensitivity_stability} xếp hạng các mô hình theo trung bình $\sigma(R^2)$ qua ba tỷ lệ phân chia.
+Chỉ số này đo trực tiếp mức độ nhạy cảm với sự biến động của phân chia dữ liệu.
+
+\begin{table}[h]
+\centering
+\caption{Xếp hạng độ ổn định theo trung bình $\sigma(R^2)$ qua ba tỷ lệ phân chia.
+Giá trị nhỏ hơn biểu thị mô hình ổn định hơn.}
+\label{tab:sensitivity_stability}
+\begin{tabular}{clc}
+\toprule
+\textbf{Xếp hạng} & \textbf{Mô hình} & \textbf{avg $\sigma(R^2)$} \\
+\midrule
+1 & Elastic Net & $0.00684$ \\
+2 & Ridge       & $0.00690$ \\
+3 & Lasso       & $0.00818$ \\
+4 & OLS         & $8.32\times10^4$ \\
+5 & WLS         & $\approx5.90\times10^{25}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+    \item \textbf{Elastic Net (1):} avg $\sigma(R^2) = 0.00684$ --- ổn định nhất. Kết hợp L1+L2 kiểm soát phương sai hiệu quả ngay cả khi tập huấn luyện thu hẹp.
+    \item \textbf{Ridge (2):} avg $\sigma(R^2) = 0.00690$ --- chênh lệch rất nhỏ so với Elastic Net, cho thấy điều chuẩn L2 đơn thuần là đủ ổn định trong bài toán này.
+    \item \textbf{Lasso (3):} avg $\sigma(R^2) = 0.00818$ --- ổn định hơn một chút so với Ridge khi tập nhỏ do tính thưa giúp triệt tiêu các đặc trưng nhiễu.
+    \item \textbf{OLS (4):} avg $\sigma(R^2) = 8.32\times10^4$ --- phương sai bùng nổ theo bậc $10^4$, không kiểm soát được.
+    \item \textbf{WLS (5):} avg $\sigma(R^2) \approx 5.90\times10^{25}$ --- nhạy cảm nhất. Trọng số không đồng đều học từ phần dư gây khuếch đại mạnh sự biến động.
+\end{itemize}
+
+\begin{importantbox}{Kết luận: Sensitivity Analysis}
+Các mô hình có điều chuẩn hóa (Ridge, Lasso, Elastic Net) vượt trội về cả hiệu năng lẫn
+độ ổn định so với OLS và WLS ở mọi tỷ lệ phân chia.
+Điều chuẩn hóa đánh đổi một phần bias để đổi lấy sự giảm đáng kể trong variance,
+cải thiện khả năng khái quát hóa trong điều kiện dữ liệu hạn chế.
+OLS và WLS không phù hợp khi tập huấn luyện bị hạn chế, do rủi ro gần suy biến ma trận $\boldsymbol{\Phi}^\top\boldsymbol{\Phi}$.
+\end{importantbox}
+
+\subsubsection{Noise Injection}
+
+Thí nghiệm Noise Injection đánh giá tính bền vững của mô hình trước biến động trong dữ liệu đầu vào
+thay vì biến động trong phân chia mẫu.
+Mô hình được huấn luyện trên dữ liệu sạch, sau đó đánh giá trên tập kiểm định đã bị thêm nhiễu
+với cường độ tăng dần, mô phỏng môi trường triển khai thực tế có sai số cảm biến.
+
+\vspace{0.5em}
+\noindent\textcolor{lightblue}{\textbf{1. Thiết lập thí nghiệm}}
+\vspace{0.5em}
+
+\begin{itemize}
+    \item \textbf{Mô hình nhiễu:} Nhiễu Gaussian $\epsilon \sim \mathcal{N}(0, \sigma^2)$ được thêm vào các đặc trưng của tập kiểm định sau khi chuẩn hóa; $\sigma$ do đó được diễn giải theo đơn vị độ lệch chuẩn của đặc trưng.
+    \item \textbf{Mức cường độ:} $\sigma \in \{0.0,\, 0.1,\, 0.5,\, 1.0\}$. Mức $\sigma = 0$ là mức cơ sở (không có nhiễu).
+    \item \textbf{Chiến lược:} Huấn luyện trên dữ liệu sạch, chỉ thêm nhiễu vào tập kiểm định, mô phỏng tình huống cảm biến bị nhiễu điện từ hoặc sai số đo lường.
+    \item \textbf{Hạt giống:} Cố định \texttt{seed = 42} đảm bảo tính tái hiện.
+    \item \textbf{Chỉ số đánh giá:} Mức giảm $\Delta R^2 = R^2_{\sigma=0} - R^2_{\sigma=1.0}$; giá trị nhỏ hơn nghĩa là mô hình bền vững hơn.
+\end{itemize}
+
+\vspace{0.5em}
+\noindent\textcolor{lightblue}{\textbf{2. Kết quả}}
+\vspace{0.5em}
+
+Bảng~\ref{tab:noise_injection} so sánh $R^2$ tại mức cơ sở và mức nhiễu cao nhất.
+
+\begin{table}[h]
+\centering
+\caption{$R^2$ tại mức cơ sở ($\sigma=0$) và mức nhiễu cao nhất ($\sigma=1.0$), cùng độ giảm $\Delta R^2$.
+Ô đánh dấu ($\dagger$) biểu thị kết quả bất thường do mô hình sụp đổ.}
+\label{tab:noise_injection}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccrl}
+\toprule
+\textbf{Mô hình} & $R^2\;(\sigma=0)$ & $R^2\;(\sigma=1.0)$ & $\Delta R^2$ & \textbf{Đánh giá} \\
+\midrule
+OLS         & $0.0580$  & $-5.67\times10^{13}$$^\dagger$ & $\approx+5.67\times10^{13}$$^\dagger$ & Sụp đổ \\
+Ridge       & $0.0896$  & $-0.3589$                      & $+0.4484$                            & Bền vững \\
+Lasso       & $-0.0036$ & $-1.0894$                      & $+1.0858$                            & Nhạy cảm \\
+Elastic Net & $0.0917$  & $-0.3290$                      & $+0.4207$                            & Bền vững nhất \\
+WLS         & $0.0637$  & $-2.64\times10^{27}$$^\dagger$ & $\approx+2.64\times10^{27}$$^\dagger$ & Sụp đổ \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\textbf{Nhóm bền vững (Elastic Net, Ridge):}
+Elastic Net đạt $\Delta R^2 = 0.4207$ và Ridge đạt $\Delta R^2 = 0.4484$, xếp hạng 1 và 2.
+Điều chuẩn L2 giữ $\|\mathbf{w}\|$ nhỏ, từ đó hạn chế cơ chế khuếch đại nhiễu
+$\|\delta\hat{y}\| \leq \|\mathbf{w}\| \cdot \|\delta\mathbf{x}\|$.
+
+\textbf{Lasso (nhạy cảm hơn dự kiến):}
+Mặc dù có điều chuẩn hóa, Lasso có $\Delta R^2 = 1.0858$, lớn hơn đáng kể so với Ridge và Elastic Net.
+Nguyên nhân: nghiệm thưa của L1 khiến các hệ số không bị triệt tiêu mang giá trị lớn hơn,
+làm tăng $\|\mathbf{w}\|$ cục bộ và khuếch đại nhiễu mạnh hơn.
+
+\textbf{OLS và WLS (sụp đổ hoàn toàn):}
+Không có điều chuẩn hóa, $\|\mathbf{w}\|$ rất lớn khiến $R^2$ giảm xuống $-5.67\times10^{13}$ (OLS)
+và $-2.64\times10^{27}$ (WLS) tại $\sigma=1.0$.
+WLS đặc biệt nhạy cảm do trọng số không đồng đều học từ phần dư OLS
+tạo ra cấu trúc khuếch đại nhiễu không đồng nhất trên từng chiều đặc trưng.
+
+\begin{importantbox}{Kết luận: Noise Injection}
+Elastic Net là mô hình bền vững nhất trước nhiễu Gaussian ($\Delta R^2 = 0.4207$),
+tiếp theo là Ridge với mức suy giảm gần tương đương.
+OLS và WLS không phù hợp để triển khai trong môi trường có nhiễu đầu vào,
+do thiếu cơ chế kiểm soát $\|\mathbf{w}\|$.
+Kết hợp với kết quả Sensitivity Analysis, điều chuẩn hóa L2 (hoặc L1+L2) là điều kiện cần thiết
+để đảm bảo tính bền vững của mô hình hồi quy tuyến tính trong thực tế.
+\end{importantbox}
+
+\subsubsection{Feature Corruption}
+
+\paragraph{Thiết lập thí nghiệm.}
+Để đánh giá tính bền vững của các mô hình trước sự thiếu hụt dữ liệu,
+thí nghiệm mô phỏng quá trình mất dữ liệu ngẫu nhiên hoàn toàn
+(\textit{Missing Completely At Random}, MCAR) bằng cách xóa $p \in \{10\%, 20\%, 30\%\}$
+giá trị trên các đặc trưng liên tục của tập huấn luyện.
+Hạt giống ngẫu nhiên được cố định (\texttt{seed = 42}) nhằm đảm bảo
+tính tái hiện của thí nghiệm.
+Ba chiến lược nội suy được so sánh:
+\textbf{Mean imputation} (thay thế bằng giá trị trung bình cột),
+\textbf{Median imputation} (thay thế bằng trung vị cột),
+và \textbf{KNN imputation} ($k=5$, nội suy dựa trên $k$ láng giềng gần nhất trong
+không gian đặc trưng).
+Sau mỗi lần nội suy, bộ tham số $(\hat{\mu}, \hat{\sigma})$ của imputer
+được học hoàn toàn trên tập huấn luyện và áp dụng lên tập kiểm định
+để tránh rò rỉ dữ liệu .
+Hiệu suất được đo bằng RMSE và $R^2$ (hồi quy) và Accuracy, F1-score
+(phân lớp).
+
+% -------------------------------------------------------
+\paragraph{Kết quả – Regression.}
+Bảng~\ref{tab:corruption_reg} trình bày kết quả trên ba mô hình hồi quy:
+OLS Normal Equations, Ridge ($\lambda^*$ chọn qua CV), và Lasso ($\lambda^*$ chọn qua CV).
+
+\begin{table}[h]
+\centering
+\caption{RMSE và $R^2$ theo chiến lược nội suy và mức độ xóa dữ liệu (Regression).
+Ô được đánh dấu ($\dagger$) biểu thị kết quả bất thường cần chú ý.}
+\label{tab:corruption_reg}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llccccccc}
+\toprule
+& & \multicolumn{2}{c}{\textbf{OLS Normal Eq.}} & \multicolumn{2}{c}{\textbf{Ridge}} & \multicolumn{2}{c}{\textbf{Lasso}} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}\cmidrule(lr){7-8}
+\textbf{Corruption} & \textbf{Imputation} & RMSE & $R^2$ & RMSE & $R^2$ & RMSE & $R^2$ \\
+\midrule
+\multirow{3}{*}{10\%}
+  & Mean   & 90.25 & 0.042 & 85.21 & 0.146 & 88.51 & 0.079 \\
+  & Median & 90.57 & 0.035 & 85.31 & 0.144 & 88.79 & 0.073 \\
+  & KNN    & 90.78 & 0.031 & 85.36 & 0.143 & 88.70 & 0.075 \\
+\midrule
+\multirow{3}{*}{20\%}
+  & Mean   & 90.08 & 0.046 & 85.18 & 0.147 & 88.38 & 0.082 \\
+  & Median & 475.31$^\dagger$ & $-$25.56$^\dagger$ & 85.37 & 0.143 & 88.88 & 0.071 \\
+  & KNN    & 155.54$^\dagger$ & $-$1.84$^\dagger$  & 85.37 & 0.143 & 88.72 & 0.074 \\
+\midrule
+\multirow{3}{*}{30\%}
+  & Mean   & 89.89 & 0.050 & 85.16 & 0.147 & 88.23 & 0.085 \\
+  & Median & 90.84 & 0.030 & 85.47 & 0.141 & 89.04 & 0.068 \\
+  & KNN    & 90.39 & 0.039 & 85.35 & 0.144 & 88.70 & 0.075 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+Kết quả cho thấy \textbf{Ridge Regression đạt hiệu suất ổn định nhất}
+trên mọi mức độ xóa và mọi chiến lược nội suy
+(RMSE $\approx 85.2$, $R^2 \approx 0.145$), tiếp theo là Lasso
+(RMSE $\approx 88$--$89$), trong khi OLS Normal Equations
+biến động lớn nhất.
+
+Đáng chú ý, tổ hợp \{20\%, Median, OLS\} cho kết quả bất thường
+với RMSE $= 475.31$ và $R^2 = -25.56$, và tổ hợp \{20\%, KNN, OLS\}
+cũng cho RMSE $= 155.54$, $R^2 = -1.84$.
+Hiện tượng này xuất phát từ bản chất toán học của OLS:
+nghiệm Normal Equations $\mathbf{w}^* = (\boldsymbol{\Phi}^\top\boldsymbol{\Phi})^{-1}\boldsymbol{\Phi}^\top\mathbf{t}$
+nhạy cảm với điều kiện số của ma trận
+$\boldsymbol{\Phi}^\top\boldsymbol{\Phi}$.
+Khi median imputation ở mức 20\% corruption tạo ra nhiều hàng trùng lặp hoặc
+giá trị hằng số trong một số đặc trưng, ma trận thiết kế trở nên
+gần suy biến, dẫn đến nghiệm OLS bùng nổ.
+KNN imputation ở mức tương tự cũng tạo ra các cấu trúc tương quan bất thường
+làm tăng số điều kiện của ma trận.
+Ridge Regression và Lasso không bị ảnh hưởng vì số hạng điều chỉnh
+$\lambda\mathbf{I}$ trong $(\boldsymbol{\Phi}^\top\boldsymbol{\Phi} + \lambda\mathbf{I})^{-1}$
+đảm bảo ma trận luôn khả nghịch, đây chính là nguồn gốc của
+tính bền vững với dữ liệu thiếu.
+
+Ngoài ra, kết quả tổng thể cho thấy Mean imputation và Median imputation
+cho hiệu suất tương đương với KNN imputation trên dữ liệu này.
+Điều này phù hợp với lý thuyết: KNN imputation chỉ vượt trội khi
+các đặc trưng có tương quan cao với nhau;
+trên dữ liệu có cấu trúc tương quan yếu,
+ưu thế của KNN so với thống kê tóm gọn (mean/median) bị thu hẹp.
+
+% -------------------------------------------------------
+\paragraph{Kết quả – Classification.}
+Bảng~\ref{tab:corruption_cls} trình bày kết quả trên Logistic Regression
+với Gradient Descent và Newton--Raphson.
+
+\begin{table}[h]
+\centering
+\caption{Accuracy và F1-score theo chiến lược nội suy và mức độ xóa dữ liệu (Classification).}
+\label{tab:corruption_cls}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llcccc}
+\toprule
+& & \multicolumn{2}{c}{\textbf{LR -- Gradient Descent}} & \multicolumn{2}{c}{\textbf{LR -- Newton--Raphson}} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}
+\textbf{Corruption} & \textbf{Imputation} & Accuracy & F1 & Accuracy & F1 \\
+\midrule
+\multirow{3}{*}{10\%}
+  & Mean   & 0.9951 & 0.9951 & 0.9980 & 0.9980 \\
+  & Median & 0.9941 & 0.9941 & 0.9980 & 0.9980 \\
+  & KNN    & 0.9961 & 0.9961 & 0.9990 & 0.9990 \\
+\midrule
+\multirow{3}{*}{20\%}
+  & Mean   & 0.9941 & 0.9941 & 0.9980 & 0.9980 \\
+  & Median & 0.9941 & 0.9941 & 0.9946 & 0.9946 \\
+  & KNN    & 0.9961 & 0.9961 & 0.9980 & 0.9980 \\
+\midrule
+\multirow{3}{*}{30\%}
+  & Mean   & 0.9931 & 0.9931 & 0.9956 & 0.9956 \\
+  & Median & 0.9911 & 0.9912 & 0.9921 & 0.9922 \\
+  & KNN    & 0.9956 & 0.9956 & 0.9980 & 0.9980 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+Cả hai mô hình phân lớp duy trì Accuracy và F1 trên 0.99
+ở mọi mức độ xóa dữ liệu và mọi chiến lược nội suy,
+biểu đồ phân bố kết quả gần như phẳng.
+Có hai cách giải thích:
+(i) bộ dữ liệu phân lớp có cấu trúc phân tách tuyến tính rõ ràng,
+khiến mô hình tuyến tính không nhạy với nhiễu đầu vào ở mức độ thí nghiệm;
+(ii) với bài toán phân lớp có tỉ lệ mất cân bằng lớp cao,
+Accuracy và F1 weighted không phân biệt được sự suy giảm nhỏ trên lớp thiểu số.
+Do đó, với bộ dữ liệu phân lớp này, thí nghiệm Feature Corruption
+không đủ nhạy để phân biệt giữa các chiến lược nội suy;
+kết luận về robustness nên dựa chủ yếu vào kết quả hồi quy.
+
+% -------------------------------------------------------
+\paragraph{Kết luận.}
+Ridge Regression là mô hình bền vững nhất trước sự thiếu hụt dữ liệu
+nhờ cơ chế chính quy hóa L2 đảm bảo tính ổn định số.
+OLS Normal Equations là mô hình nhạy cảm nhất, đặc biệt kết hợp
+với Median hoặc KNN imputation ở mức corruption vừa phải (20\%),
+do rủi ro gần suy biến của ma trận thiết kế.
+Sự khác biệt giữa các chiến lược nội suy là nhỏ khi mô hình đã có
+cơ chế chính quy hóa; Mean imputation là lựa chọn đơn giản và
+đủ hiệu quả trong trường hợp này.
+
+\subsubsection{Phân tích khả năng hội tụ (convergence)}
+
+\paragraph{Thiết lập thí nghiệm.}
+Khả năng hội tụ được phân tích riêng cho hai bài toán.
+Đối với hồi quy, Mini-batch Gradient Descent được huấn luyện tối đa 500 epochs
+với hai chiến lược \textit{learning rate schedule}:
+\textbf{Step Decay} (giảm learning rate theo bội số cố định sau mỗi $k$ epochs)
+và \textbf{Cosine Annealing} (giảm theo hàm cosine từ $\eta_{\max}$ về $\eta_{\min}$).
+Đối với phân lớp, hai thuật toán tối ưu được so sánh:
+\textbf{Gradient Descent} (bậc nhất, cập nhật theo $\nabla E$)
+và \textbf{Newton--Raphson} (bậc hai, cập nhật theo $\mathbf{H}^{-1}\nabla E$).
+Tiêu chí hội tụ được xác định là thời điểm giảm loss giữa hai epoch liên tiếp
+nhỏ hơn ngưỡng $\epsilon = 10^{-6}$.
+
+% -------------------------------------------------------
+\paragraph{Hồi quy: So sánh Step Decay và Cosine Annealing.}
+
+Hình~\ref{fig:convergence_reg} trình bày training loss của Mini-batch GD
+theo hai chiến lược learning rate schedule.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.85\textwidth]{graphics/convergence_regression.png}
+    \caption{Training loss của Mini-batch GD với Step Decay và Cosine Annealing
+    trên bài toán hồi quy (500 epochs).
+    Điểm đỏ đánh dấu giá trị loss nhỏ nhất của Cosine Annealing tại epoch 500
+    ($\mathcal{L} = 8967.53$).}
+    \label{fig:convergence_reg}
+\end{figure}
+
+Cả hai chiến lược thể hiện quá trình giảm loss đặc trưng gồm hai giai đoạn:
+giai đoạn hội tụ nhanh trong khoảng 50 epoch đầu (loss giảm từ $\sim$9580 xuống $\sim$9050),
+tiếp theo là giai đoạn tinh chỉnh chậm từ epoch 50 đến 500.
+Step Decay tạo ra dao động rõ ràng tại các mốc giảm learning rate
+do sự thay đổi đột ngột của bước cập nhật, trong khi Cosine Annealing
+cho đường loss mượt hơn nhờ lịch trình giảm liên tục.
+
+Tuy nhiên, tại epoch 500, loss của Cosine Annealing ($\mathcal{L} = 8967.53$)
+vẫn đang có xu hướng giảm nhẹ, cho thấy mô hình \textbf{chưa đạt điểm hội tụ thực sự}
+trong giới hạn 500 epochs này.
+Hai đường loss hội tụ về cùng vùng giá trị cuối, phản ánh thực tế rằng
+với hàm mất mát lồi như OLS, sự lựa chọn learning rate schedule
+ảnh hưởng đến tốc độ hội tụ ban đầu nhưng không làm thay đổi nghiệm tối ưu.
+Về mặt lý thuyết, cả hai phương pháp đều hội tụ với tốc độ $O(1/k)$
+đối với hàm lồi Lipschitz liên tục, phù hợp với hành vi quan sát được.
+
+% -------------------------------------------------------
+\paragraph{Phân lớp: So sánh Gradient Descent và Newton--Raphson.}
+
+Hình~\ref{fig:convergence_cls} so sánh quá trình hội tụ của hai thuật toán
+tối ưu Logistic Regression trên tập huấn luyện.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.85\textwidth]{graphics/convergence_classification.png}
+    \caption{Training loss (cross-entropy) của Gradient Descent và Newton--Raphson
+    trên bài toán phân lớp. Newton--Raphson hội tụ tại epoch 14
+    ($\mathcal{L} = 0.0001$); Gradient Descent hội tụ tại epoch 1272
+    ($\mathcal{L} = 0.0207$).}
+    \label{fig:convergence_cls}
+\end{figure}
+
+Kết quả thực nghiệm cho thấy sự khác biệt lớn về tốc độ hội tụ:
+Newton--Raphson đạt hội tụ tại \textbf{epoch 14} với cross-entropy loss
+$\mathcal{L}_{\text{NR}} = 0.0001$,
+trong khi Gradient Descent cần \textbf{epoch 1272} để hội tụ
+với $\mathcal{L}_{\text{GD}} = 0.0207$.
+Newton--Raphson hội tụ nhanh hơn khoảng \textbf{91 lần} về số vòng lặp
+và đạt giá trị loss thấp hơn đáng kể.
+
+Sự vượt trội này có cơ sở lý thuyết rõ ràng.
+Newton--Raphson là thuật toán bậc hai, cập nhật tham số theo công thức
+\begin{equation}
+    \mathbf{w}^{(\text{new})} = \mathbf{w}^{(\text{old})} - \mathbf{H}^{-1}\nabla E(\mathbf{w}),
+    \label{eq:newton_update}
+\end{equation}
+trong đó $\mathbf{H} = \boldsymbol{\Phi}^\top\mathbf{R}\boldsymbol{\Phi} + \lambda\mathbf{I}$
+là ma trận Hessian và $\mathbf{R} = \mathrm{diag}(y_n(1-y_n))$.
+Thông tin bậc hai từ Hessian cho phép thuật toán xấp xỉ hàm mất mát
+bằng parabol cục bộ, dẫn đến tốc độ hội tụ \textbf{siêu tuyến tính}
+ -- cụ thể là bậc hai 
+khi lân cận nghiệm tối ưu, tức $O(\log(1/\varepsilon))$ bước
+để đạt độ chính xác $\varepsilon$.
+Ngược lại, Gradient Descent chỉ sử dụng thông tin bậc nhất ,
+dẫn đến tốc độ hội tụ tuyến tính  $O(1/\varepsilon)$.
+
+Tuy nhiên, ưu thế tốc độ của Newton--Raphson đi kèm với chi phí tính toán
+cao hơn mỗi bước: nghịch đảo Hessian có độ phức tạp $O(NM^2 + M^3)$
+trong khi mỗi bước Gradient Descent chỉ tốn $O(NM)$.
+Trên bộ dữ liệu này với $N$ lớn, chi phí mỗi bước Newton--Raphson
+đáng kể hơn, song với số lượng epoch ít hơn 91 lần,
+tổng chi phí huấn luyện vẫn thấp hơn đáng kể so với Gradient Descent.
+
+% -------------------------------------------------------
+\paragraph{Kết luận.}
+Thí nghiệm hội tụ làm nổi bật hai điểm chính.
+Thứ nhất, trong bài toán hồi quy,
+lịch trình learning rate ảnh hưởng đến sự ổn định của quá trình tối ưu
+(Cosine Annealing cho đường loss mượt hơn Step Decay)
+nhưng không thay đổi đáng kể nghiệm cuối cùng do bản chất lồi của hàm mất mát.
+500 epochs chưa đủ để cả hai chiến lược đạt hội tụ hoàn toàn,
+gợi ý rằng cần tăng số epochs hoặc điều chỉnh learning rate
+để đạt hiệu suất tối đa.
+Thứ hai, trong bài toán phân lớp,
+Newton--Raphson vượt trội rõ rệt về tốc độ hội tụ so với Gradient Descent
+(14 so với 1272 epochs), đồng thời đạt loss thấp hơn,
+xác nhận về mặt thực nghiệm lý thuyết hội tụ bậc hai.
+Sự đánh đổi giữa chi phí mỗi bước và số bước cần thiết
+cần được cân nhắc khi chọn thuật toán tối ưu trong thực tế.
+
+\clearpage

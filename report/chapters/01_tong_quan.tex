@@ -74,6 +74,7 @@
 \end{itemize}
 
 \subsection{Phân công nhiệm vụ và mức độ đóng góp}
+
 \newlist{tableitemize}{itemize}{1}
 \setlist[tableitemize]{
     label=\textbullet, 
@@ -86,42 +87,61 @@
 \begin{center}
     \newcounter{memberrow} 
     \setcounter{memberrow}{0}
-    \renewcommand{\arraystretch}{1.4}
+    \renewcommand{\arraystretch}{1.5}
     
     \begin{tabularx}{\textwidth}{|>{\stepcounter{memberrow}\thememberrow}c|p{3.5cm}|c|X|c|}
         \hline
+        \rowcolor[HTML]{E8E8E8}
         \multicolumn{1}{|c|}{\textbf{STT}} & \centering\textbf{Họ và tên} & \textbf{MSSV} & \centering\textbf{Nhiệm vụ chính} & \textbf{Đóng góp} \\
         \hline
-        & Lê Hà Thanh Chương & 23120195 & 
+        
+        % THÀNH VIÊN 1 - PROJECT LEAD
+        & \textbf{Lê Hà Thanh Chương} & 23120195 & 
         \begin{tableitemize}
-            \item Tiền xử lý dữ liệu (EDA)
-            \item Viết báo cáo phần Hồi quy
-            \item Kiểm định Breusch-Pagan
+            \item Quản lý tiến độ chung của toàn dự án.
+            \item \textbf{Cơ bản:} Khám phá lý dữ liệu (EDA); Cài đặt \& báo cáo Logistic Regression (Gradient Descent, IRLS, đa lớp), LDA/QDA.
+            \item \textbf{Nâng cao:} Mô hình Probit, Xấp xỉ Laplace.
+            \item \textbf{Phân tích:} Mối liên kết Hồi quy - Phân lớp, năng lực tổng quát hóa (VC Dimension).
+            \item Kiểm tra chéo tiến độ \& mã nguồn.
         \end{tableitemize} & 100\% \\ \hline
-        & Trà Văn Sỹ & 23120197 & 
+        
+        % THÀNH VIÊN 2
+        & \textbf{Trà Văn Sỹ} & 23120197 & 
         \begin{tableitemize}
-            \item Triển khai Logistic Regression
-            \item Tối ưu Gradient Descent
-            \item Xử lý Missing values
+            \item \textbf{Cơ bản:} Khám phá lý dữ liệu (EDA); Cài đặt \& báo cáo Perceptron, Logistic Regression + Regularization (L1/L2, k-fold CV).
+            \item \textbf{Nâng cao:} Kernel Logistic Regression, Gaussian Naive Bayes.
+            \item \textbf{Phân tích:} Tính toán VC Dimension thực nghiệm; Trực quan hóa độ đo K-fold CV (ROC/AUC), Đánh giá so sánh toàn diện.
+            \item Kiểm tra chéo tiến độ \& mã nguồn.
         \end{tableitemize} & 100\% \\ \hline
-        & Huỳnh Đức Thịnh & 23120199 & 
+        
+        % THÀNH VIÊN 3
+        & \textbf{Huỳnh Đức Thịnh} & 23120199 & 
         \begin{tableitemize}
-            \item Xây dựng mô hình LDA/QDA
-            \item Vẽ biểu đồ ROC/AUC
-            \item McNemar's test
+            \item \textbf{Cơ bản:} Tiền xử lý hồi quy; Cài đặt \& báo cáo Linear Regression (OLS, Mini-batch GD).
+            \item \textbf{Nâng cao:} Hồi quy Bayesian đầy đủ, Evidence Maximization.
+            \item \textbf{Phân tích:} Learning Curves, phân tích phần dư, tính toán độ phức tạp; đánh giá tính nhạy cảm và bền vững.
+            \item Kiểm tra chéo tiến độ \& mã nguồn.
         \end{tableitemize} & 100\% \\ \hline
-        & Bùi Trung Hiếu & 23120257 & 
+        
+        % THÀNH VIÊN 4
+        & \textbf{Bùi Trung Hiếu} & 23120257 & 
         \begin{tableitemize}
-            \item Nghiên cứu Regularization
-            \item Lựa chọn đặc trưng
-            \item Validation curve
+            \item \textbf{Cơ bản:} Xử lý Missing values, chuẩn hóa; Cài đặt \& báo cáo Ridge (L2), Lasso (L1), Feature Selection.
+            \item \textbf{Nâng cao:} Kernel Ridge Regression, Gaussian Process.
+            \item \textbf{Phân tích:} Kiểm định thống kê (Paired t-test, Wilcoxon, McNemar), Reliability Diagram.
+            \item Tổng hợp báo cáo (Khả năng tái hiện, kết luận).
+            \item Kiểm tra chéo tiến độ \& mã nguồn.
         \end{tableitemize} & 100\% \\ \hline
-        & Lê Công Phúc & 23120330 & 
+        
+        % THÀNH VIÊN 5
+        & \textbf{Lê Công Phúc} & 23120330 & 
         \begin{tableitemize}
-            \item Tổng kết mô hình phi tuyến
-            \item Ablation study
-            \item Khả năng tái hiện thí nghiệm
+            \item \textbf{Cơ bản:} Cài đặt \& báo cáo mô hình phi tuyến (Polynomial, RBF, Sigmoid), Validation Curve, Ablation Study.
+            \item \textbf{Nâng cao:} Robust Regression.
+            \item \textbf{Phân tích:} Phân tích Bias-Variance Tradeoff, Đánh giá K-fold CV phần hồi quy, phân tích ranh giới quyết định \& phân tích lỗi.
+            \item Kiểm tra chéo tiến độ \& mã nguồn.
         \end{tableitemize} & 100\% \\ \hline
+        
     \end{tabularx}
 \end{center}
 
