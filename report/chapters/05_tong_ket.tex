@@ -16,7 +16,7 @@
     \item \textbf{Hoàn thiện thông tin tái hiện:} hệ thống đã có cơ chế lưu split indices và metric của từng fold để phục vụ đối chiếu kết quả giữa các lần chạy. Bên cạnh đó, thí nghiệm cũng đã ghi nhận thời gian thực thi và mức RAM sử dụng nhiều nhất, đồng thời cung cấp file \texttt{requirements.txt} và chỉ rõ môi trường chạy với Python 3.12.7 để bảo đảm khả năng tái lập.
 \end{itemize}
 
-\noindent\textcolor{infocolor}{\textbf{Thời gian chạy và bộ nhớ sử dụng cho các thuật toán trong bài toán hồi quy}}
+\noindent\textcolor{lightblue}{\textbf{Thời gian chạy và bộ nhớ sử dụng cho các thuật toán trong bài toán hồi quy}}
 
 Để minh họa rõ hơn chi phí tính toán của các thí nghiệm hồi quy, Bảng~\ref{tab:regression_runtime_memory} tổng hợp thời gian thực thi và mức bộ nhớ cực đại được ghi nhận đối với các thuật toán và kịch bản thực nghiệm chính.
 
@@ -81,7 +81,7 @@
 \end{itemize}
 \end{warningbox}
 
-\noindent\textcolor{infocolor}{\textbf{Thời gian chạy và bộ nhớ sử dụng cho các thuật toán trong bài toán phân lớp}}
+\noindent\textcolor{lightblue}{\textbf{Thời gian chạy và bộ nhớ sử dụng cho các thuật toán trong bài toán phân lớp}}
 
 Tương tự bài toán hồi quy, Bảng~\ref{tab:classification_runtime_memory} tổng hợp thời gian thực thi và mức bộ nhớ cực đại của các mô hình phân lớp và các thí nghiệm mở rộng.
 
@@ -138,7 +138,7 @@ Tương tự bài toán hồi quy, Bảng~\ref{tab:classification_runtime_memory
 
 \subsection{Kết luận chung và hướng phát triển}
 
-\noindent\textcolor{infocolor}{\textbf{1. Kết luận chung}}
+\subsubsection{Kết luận chung}
 
 Đồ án đã hoàn thành mục tiêu nghiên cứu và triển khai các thuật toán học máy có giám sát trên hai nhóm bài toán cốt lõi là hồi quy và phân lớp, đồng thời giữ đúng định hướng quan trọng của đề tài là cài đặt thuật toán từ đầu dựa trên công thức toán học thay vì phụ thuộc trực tiếp vào các mô hình huấn luyện có sẵn trong thư viện. Cách tiếp cận này giúp nhóm không chỉ xây dựng được một hệ thống thực nghiệm tương đối đầy đủ mà còn hiểu rõ hơn bản chất của từng mô hình, từ giả thiết xác suất, hàm mất mát, cơ chế tối ưu hóa đến khả năng tổng quát hóa trên dữ liệu mới.
 
@@ -155,7 +155,7 @@ Có thể tóm tắt các kết quả chính như sau:
 
 Nhìn chung, đồ án đã đạt được mục tiêu đề ra cả về chiều rộng lẫn chiều sâu: vừa xây dựng được một tập hợp mô hình học có giám sát tương đối đầy đủ, vừa tạo ra một khung thực nghiệm có tính phân tích, đối chiếu và tái hiện tốt. Đây là nền tảng vững chắc để tiếp tục nghiên cứu các mô hình học máy nâng cao hơn trong tương lai.
 
-\noindent\textcolor{infocolor}{\textbf{2. Hướng phát triển}}
+\subsubsection{Hướng phát triển}
 
 Trong thời gian tới, đồ án có thể được mở rộng theo một số hướng chính sau:
 \begin{itemize}[labelsep=10pt, leftmargin=1.8cm]
