@@ -1438,73 +1438,69 @@ def plot_corruption_results(df_results, task_type='regression'):
     plt.tight_layout()
     plt.show()
 
-
 def plot_convergence_classification(history_dict):
-    """
-    history_dict format: Dictionary mapping Model Name -> Loss History List
-    {
-        'LR - Gradient Descent': gd_model.loss_history,
-        'LR - Newton-Raphson':   nr_model.loss_history
-    }
-    """
     fig, ax = plt.subplots(figsize=(11, 6))
     colors = ['blue', 'green', 'orange', 'red', 'purple']
 
     convergence_points = []
+    max_epoch = 0 
 
     for i, (name, loss_history) in enumerate(history_dict.items()):
         epochs = list(range(1, len(loss_history) + 1))
         color  = colors[i % len(colors)]
+        
         ax.plot(epochs, loss_history,
                 label=f'{name} (Train Loss)',
                 color=color, linewidth=2)
-        ax.scatter(len(loss_history), loss_history[-1],
-                   color=color, s=70, zorder=5)
-        convergence_points.append((len(loss_history), loss_history[-1], color, name))
+        
+        final_epoch = len(loss_history)
+        final_loss = loss_history[-1]
+        ax.scatter(final_epoch, final_loss, color=color, s=70, zorder=5)
+        
+        convergence_points.append((final_epoch, final_loss, color, name))
+        if final_epoch > max_epoch:
+            max_epoch = final_epoch
 
-    # --- Annotation dùng tọa độ axes (0–1) để luôn nằm ngoài vùng đường loss ---
-    # Sắp xếp theo epoch tăng dần → điểm epoch nhỏ để phía dưới, epoch lớn phía trên
-    convergence_points_sorted = sorted(convergence_points, key=lambda p: p[0])
-
-    # Vị trí cố định trong axes coordinates: góc dưới-phải và trên-phải
-    # axes fraction: (0,0) = góc dưới trái, (1,1) = góc trên phải
-    fixed_positions = [
-        (0.97, 0.18),   # vị trí 1: góc dưới phải  → epoch nhỏ (Newton–Raphson)
-        (0.97, 0.38),   # vị trí 2: cao hơn         → epoch lớn (GD)
-    ]
-    # Nếu có nhiều hơn 2 mô hình, tự sinh thêm vị trí
-    for k in range(2, len(convergence_points_sorted)):
-        fixed_positions.append((0.97, 0.18 + k * 0.20))
-
-    for idx, (ep, val, color, name) in enumerate(convergence_points_sorted):
-        ax_x, ax_y = fixed_positions[idx]
+    for ep, val, color, name in convergence_points:
         short_name = name.split('(')[0].strip()
         label_text = f'{short_name}\nEpoch {ep}  |  Loss: {val:.4f}'
 
+        # --- TINH CHỈNH VỊ TRÍ ---
+        if ep > max_epoch * 0.5:
+            # Gradient Descent (nửa phải của biểu đồ)
+            offset = (-40, 30)
+            ha_align = 'right'
+            va_align = 'bottom'
+        else:
+            # Newton-Raphson (nửa trái của biểu đồ)
+            # x = -25 (dịch sang trái 25px), y = -35 (dịch xuống dưới 35px)
+            offset = (-25, -35) 
+            ha_align = 'center'  # Căn giữa box để chữ không bị lẹm vào trục Y
+            va_align = 'top'     # Neo text box ở phía dưới điểm offset
+
         ax.annotate(
             label_text,
-            # điểm neo = điểm hội tụ thực trên đồ thị
             xy=(ep, val),
             xycoords='data',
-            # vị trí text = tọa độ axes cố định
-            xytext=(ax_x, ax_y),
-            textcoords='axes fraction',
+            xytext=offset,
+            textcoords='offset points',
             color=color,
             fontsize=9,
-            ha='right',
-            va='center',
+            ha=ha_align,
+            va=va_align,
+            zorder=10, 
             arrowprops=dict(
                 arrowstyle='->',
                 color=color,
-                lw=0.9,
-                connectionstyle='arc3,rad=0.15'
+                lw=1.2,
+                connectionstyle='arc3,rad=-0.15' # Chỉnh độ cong lại một chút cho thuận mắt khi trỏ từ dưới lên
             ),
             bbox=dict(
                 boxstyle='round,pad=0.35',
                 facecolor='white',
                 edgecolor=color,
                 linewidth=1.2,
-                alpha=0.92
+                alpha=0.95 
             )
         )
 

@@ -2476,7 +2476,7 @@ class NoiseInjectionAnalyzer:
         return pivot_r2, pivot_rmse, robustness_df
 
     @staticmethod
-    def plot_degradation(df_noise, model_names=None):
+    def plot_degradation(df_noise, model_names=None, save_path=None):
         import matplotlib.pyplot as plt
 
         if model_names is None:
@@ -2522,6 +2522,9 @@ class NoiseInjectionAnalyzer:
             ax.set_xticks(sigma_vals)
 
         plt.tight_layout()
+        if save_path:
+            plt.savefig(save_path, bbox_inches='tight', dpi=300)
+            print(f"Saved Noise Injection Robustness Test to '{save_path}'")
         plt.show()
 
     @staticmethod
