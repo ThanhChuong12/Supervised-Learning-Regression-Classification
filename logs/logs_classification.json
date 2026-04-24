@@ -1,0 +1,986 @@
+{
+  "Binary LR (Gradient Descent)": {
+    "hyperparameters": {
+      "method": "gd",
+      "learning_rate": 0.1,
+      "max_iter": 2000,
+      "tol": 1e-05,
+      "task": "binary_classification"
+    },
+    "data_split": {
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_accuracy": 0.9961,
+    "val_precision_binary": 0.9895,
+    "val_recall_binary": 0.9895,
+    "val_f1_binary": 0.9895,
+    "test_accuracy": 0.997,
+    "test_precision_binary": 0.9947,
+    "test_recall_binary": 0.9895,
+    "test_f1_binary": 0.9921
+  },
+  "Binary LR (Newton-Raphson/IRLS)": {
+    "hyperparameters": {
+      "method": "newton",
+      "max_iter": 50,
+      "tol": 1e-05,
+      "task": "binary_classification"
+    },
+    "data_split": {
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_accuracy": 0.999,
+    "val_precision_binary": 0.9974,
+    "val_recall_binary": 0.9974,
+    "val_f1_binary": 0.9974,
+    "test_accuracy": 0.9995,
+    "test_precision_binary": 1.0,
+    "test_recall_binary": 0.9974,
+    "test_f1_binary": 0.9987
+  },
+  "Multiclass LR - OvR (Newton)": {
+    "hyperparameters": {
+      "estimator": "BinaryLogisticRegression",
+      "method": "newton",
+      "max_iter": 50,
+      "strategy": "one_vs_rest",
+      "task": "multiclass_classification"
+    },
+    "data_split": {
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_accuracy": 0.9961,
+    "val_precision_macro": 0.9846,
+    "val_recall_macro": 0.9866,
+    "val_f1_macro": 0.9855,
+    "test_accuracy": 0.9936,
+    "test_precision_macro": 0.9806,
+    "test_recall_macro": 0.9769,
+    "test_f1_macro": 0.9783
+  },
+  "Multiclass LR - OvO (Newton)": {
+    "hyperparameters": {
+      "estimator": "BinaryLogisticRegression",
+      "method": "newton",
+      "max_iter": 50,
+      "strategy": "one_vs_one",
+      "task": "multiclass_classification"
+    },
+    "data_split": {
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_accuracy": 0.9975,
+    "val_precision_macro": 0.9895,
+    "val_recall_macro": 0.992,
+    "val_f1_macro": 0.9907,
+    "test_accuracy": 0.9975,
+    "test_precision_macro": 0.9922,
+    "test_recall_macro": 0.9911,
+    "test_f1_macro": 0.9916
+  },
+  "Multiclass LR - Softmax (GD)": {
+    "hyperparameters": {
+      "learning_rate": 0.1,
+      "max_iter": 1000,
+      "strategy": "softmax_multinomial",
+      "task": "multiclass_classification"
+    },
+    "data_split": {
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_accuracy": 0.9862,
+    "val_precision_macro": 0.9548,
+    "val_recall_macro": 0.957,
+    "val_f1_macro": 0.9557,
+    "test_accuracy": 0.9837,
+    "test_precision_macro": 0.9499,
+    "test_recall_macro": 0.9449,
+    "test_f1_macro": 0.9466
+  },
+  "Linear Discriminant Analysis (LDA)": {
+    "hyperparameters": {
+      "model": "LDA",
+      "covariance_type": "shared_pooled",
+      "task": "multiclass_classification"
+    },
+    "data_split": {
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_accuracy": 0.9936,
+    "val_precision_macro": 0.9788,
+    "val_recall_macro": 0.9785,
+    "val_f1_macro": 0.9784,
+    "test_accuracy": 0.9931,
+    "test_precision_macro": 0.9819,
+    "test_recall_macro": 0.9759,
+    "test_f1_macro": 0.9787
+  },
+  "Quadratic Discriminant Analysis (QDA)": {
+    "hyperparameters": {
+      "model": "QDA",
+      "covariance_type": "per_class",
+      "task": "multiclass_classification"
+    },
+    "data_split": {
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_accuracy": 0.9956,
+    "val_precision_macro": 0.9837,
+    "val_recall_macro": 0.988,
+    "val_f1_macro": 0.9858,
+    "test_accuracy": 0.9946,
+    "test_precision_macro": 0.9804,
+    "test_recall_macro": 0.9838,
+    "test_f1_macro": 0.9819
+  },
+  "Perceptron (OvO)": {
+    "hyperparameters": {
+      "estimator": "Perceptron",
+      "strategy": "one_vs_one",
+      "learning_rate": 0.01,
+      "max_iter": 1000,
+      "task": "multiclass_classification"
+    },
+    "data_split": {
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_accuracy": 0.9975,
+    "val_precision_macro": 0.9887,
+    "val_recall_macro": 0.9919,
+    "val_f1_macro": 0.9902,
+    "test_accuracy": 0.9961,
+    "test_precision_macro": 0.9868,
+    "test_recall_macro": 0.986,
+    "test_f1_macro": 0.9864
+  },
+  "LR - Grid Search CV (Stratified K-Fold k=5)": {
+    "hyperparameters": {
+      "estimator": "LogisticRegression (OvR)",
+      "learning_rate": 0.1,
+      "max_iter": 500,
+      "class_weight": "balanced",
+      "k_splits": 5,
+      "penalties_searched": [
+        "l1",
+        "l2"
+      ],
+      "lambda_values_searched": [
+        0.001,
+        0.01,
+        0.1,
+        1.0,
+        10.0
+      ],
+      "cv_random_seed": 42,
+      "task": "multiclass_classification"
+    },
+    "data_split": {
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "best_penalty": "l2",
+    "best_lambda_reg": 0.001,
+    "best_cv_accuracy": 0.963,
+    "cv_grid_results": [
+      {
+        "Penalty": "L1",
+        "Lambda": 0.001,
+        "Mean_CV_Accuracy": 0.9628,
+        "Std_Dev": 0.0039
+      },
+      {
+        "Penalty": "L1",
+        "Lambda": 0.01,
+        "Mean_CV_Accuracy": 0.9592,
+        "Std_Dev": 0.0037
+      },
+      {
+        "Penalty": "L1",
+        "Lambda": 0.1,
+        "Mean_CV_Accuracy": 0.9274,
+        "Std_Dev": 0.0023
+      },
+      {
+        "Penalty": "L1",
+        "Lambda": 1.0,
+        "Mean_CV_Accuracy": 0.8437,
+        "Std_Dev": 0.0286
+      },
+      {
+        "Penalty": "L1",
+        "Lambda": 10.0,
+        "Mean_CV_Accuracy": 0.5976,
+        "Std_Dev": 0.1557
+      },
+      {
+        "Penalty": "L2",
+        "Lambda": 0.001,
+        "Mean_CV_Accuracy": 0.963,
+        "Std_Dev": 0.0043
+      },
+      {
+        "Penalty": "L2",
+        "Lambda": 0.01,
+        "Mean_CV_Accuracy": 0.9617,
+        "Std_Dev": 0.0051
+      },
+      {
+        "Penalty": "L2",
+        "Lambda": 0.1,
+        "Mean_CV_Accuracy": 0.9436,
+        "Std_Dev": 0.0082
+      },
+      {
+        "Penalty": "L2",
+        "Lambda": 1.0,
+        "Mean_CV_Accuracy": 0.911,
+        "Std_Dev": 0.0066
+      },
+      {
+        "Penalty": "L2",
+        "Lambda": 10.0,
+        "Mean_CV_Accuracy": 0.9153,
+        "Std_Dev": 0.0062
+      }
+    ]
+  },
+  "Final Best LR (OvR, Best Hyperparams)": {
+    "hyperparameters": {
+      "estimator": "LogisticRegression",
+      "strategy": "one_vs_rest",
+      "learning_rate": 0.1,
+      "max_iter": 1000,
+      "penalty": "l2",
+      "lambda_reg": 0.001,
+      "class_weight": "balanced",
+      "task": "multiclass_classification"
+    },
+    "data_split": {
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_accuracy": 0.9709,
+    "val_precision_macro": 0.9029,
+    "val_recall_macro": 0.9113,
+    "val_f1_macro": 0.9043,
+    "test_accuracy": 0.9699,
+    "test_precision_macro": 0.9028,
+    "test_recall_macro": 0.9006,
+    "test_f1_macro": 0.8972
+  },
+  "Logistic Regression (Baseline)": {
+    "notebook": "02_modeling.ipynb",
+    "hyperparameters": {
+      "estimator": "LogisticRegression (OvR)",
+      "learning_rate": 0.1,
+      "max_iter": 1000,
+      "penalty": null,
+      "class_weight": null,
+      "cv_k_splits": 5,
+      "cv_random_seed": 42,
+      "task": "multiclass_classification"
+    },
+    "data_split": {
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_fold1_accuracy": 0.9762,
+    "val_fold1_precision_macro": 0.926,
+    "val_fold1_recall_macro": 0.9176,
+    "val_fold1_f1_macro": 0.9186,
+    "val_fold2_accuracy": 0.9729,
+    "val_fold2_precision_macro": 0.9143,
+    "val_fold2_recall_macro": 0.9026,
+    "val_fold2_f1_macro": 0.9078,
+    "val_fold3_accuracy": 0.9687,
+    "val_fold3_precision_macro": 0.8865,
+    "val_fold3_recall_macro": 0.8917,
+    "val_fold3_f1_macro": 0.8882,
+    "val_fold4_accuracy": 0.9728,
+    "val_fold4_precision_macro": 0.9159,
+    "val_fold4_recall_macro": 0.9111,
+    "val_fold4_f1_macro": 0.913,
+    "val_fold5_accuracy": 0.9753,
+    "val_fold5_precision_macro": 0.9206,
+    "val_fold5_recall_macro": 0.9161,
+    "val_fold5_f1_macro": 0.918,
+    "cv_fold_train_sizes": [
+      4861,
+      4861,
+      4862,
+      4862,
+      4862
+    ],
+    "cv_fold_val_sizes": [
+      1216,
+      1216,
+      1215,
+      1215,
+      1215
+    ],
+    "val_mean_accuracy": 0.9732,
+    "val_std_accuracy": 0.0026,
+    "val_mean_precision_macro": 0.9127,
+    "val_std_precision_macro": 0.0137,
+    "val_mean_recall_macro": 0.9078,
+    "val_std_recall_macro": 0.0096,
+    "val_mean_f1_macro": 0.9091,
+    "val_std_f1_macro": 0.0112,
+    "test_accuracy": 0.9729,
+    "test_precision_macro": 0.9112,
+    "test_recall_macro": 0.9059,
+    "test_f1_macro": 0.908
+  },
+  "Logistic Regression (L1 Penalty)": {
+    "notebook": "02_modeling.ipynb",
+    "hyperparameters": {
+      "estimator": "LogisticRegression (OvR)",
+      "learning_rate": 0.1,
+      "max_iter": 1000,
+      "penalty": "l1",
+      "lambda_reg": 0.01,
+      "class_weight": "balanced",
+      "cv_k_splits": 5,
+      "cv_random_seed": 42,
+      "task": "multiclass_classification"
+    },
+    "data_split": {
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_fold1_accuracy": 0.9696,
+    "val_fold1_precision_macro": 0.9026,
+    "val_fold1_recall_macro": 0.9086,
+    "val_fold1_f1_macro": 0.9054,
+    "val_fold2_accuracy": 0.9613,
+    "val_fold2_precision_macro": 0.8774,
+    "val_fold2_recall_macro": 0.8766,
+    "val_fold2_f1_macro": 0.8727,
+    "val_fold3_accuracy": 0.9695,
+    "val_fold3_precision_macro": 0.8981,
+    "val_fold3_recall_macro": 0.8999,
+    "val_fold3_f1_macro": 0.8977,
+    "val_fold4_accuracy": 0.9605,
+    "val_fold4_precision_macro": 0.8691,
+    "val_fold4_recall_macro": 0.8753,
+    "val_fold4_f1_macro": 0.871,
+    "val_fold5_accuracy": 0.9605,
+    "val_fold5_precision_macro": 0.8695,
+    "val_fold5_recall_macro": 0.875,
+    "val_fold5_f1_macro": 0.8705,
+    "cv_fold_train_sizes": [
+      4861,
+      4861,
+      4862,
+      4862,
+      4862
+    ],
+    "cv_fold_val_sizes": [
+      1216,
+      1216,
+      1215,
+      1215,
+      1215
+    ],
+    "val_mean_accuracy": 0.9643,
+    "val_std_accuracy": 0.0043,
+    "val_mean_precision_macro": 0.8833,
+    "val_std_precision_macro": 0.0143,
+    "val_mean_recall_macro": 0.8871,
+    "val_std_recall_macro": 0.0143,
+    "val_mean_f1_macro": 0.8835,
+    "val_std_f1_macro": 0.015,
+    "test_accuracy": 0.9654,
+    "test_precision_macro": 0.8928,
+    "test_recall_macro": 0.8852,
+    "test_f1_macro": 0.8814
+  },
+  "Logistic Regression (L2 Penalty)": {
+    "notebook": "02_modeling.ipynb",
+    "hyperparameters": {
+      "estimator": "LogisticRegression (OvR)",
+      "learning_rate": 0.1,
+      "max_iter": 1000,
+      "penalty": "l2",
+      "lambda_reg": 0.01,
+      "class_weight": "balanced",
+      "cv_k_splits": 5,
+      "cv_random_seed": 42,
+      "task": "multiclass_classification"
+    },
+    "data_split": {
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_fold1_accuracy": 0.972,
+    "val_fold1_precision_macro": 0.9073,
+    "val_fold1_recall_macro": 0.9199,
+    "val_fold1_f1_macro": 0.9134,
+    "val_fold2_accuracy": 0.9605,
+    "val_fold2_precision_macro": 0.8738,
+    "val_fold2_recall_macro": 0.8818,
+    "val_fold2_f1_macro": 0.8744,
+    "val_fold3_accuracy": 0.9695,
+    "val_fold3_precision_macro": 0.8933,
+    "val_fold3_recall_macro": 0.9002,
+    "val_fold3_f1_macro": 0.8961,
+    "val_fold4_accuracy": 0.9654,
+    "val_fold4_precision_macro": 0.884,
+    "val_fold4_recall_macro": 0.8911,
+    "val_fold4_f1_macro": 0.8861,
+    "val_fold5_accuracy": 0.9654,
+    "val_fold5_precision_macro": 0.886,
+    "val_fold5_recall_macro": 0.8949,
+    "val_fold5_f1_macro": 0.8883,
+    "cv_fold_train_sizes": [
+      4861,
+      4861,
+      4862,
+      4862,
+      4862
+    ],
+    "cv_fold_val_sizes": [
+      1216,
+      1216,
+      1215,
+      1215,
+      1215
+    ],
+    "val_mean_accuracy": 0.9666,
+    "val_std_accuracy": 0.0039,
+    "val_mean_precision_macro": 0.8889,
+    "val_std_precision_macro": 0.0111,
+    "val_mean_recall_macro": 0.8976,
+    "val_std_recall_macro": 0.0127,
+    "val_mean_f1_macro": 0.8917,
+    "val_std_f1_macro": 0.0129,
+    "test_accuracy": 0.965,
+    "test_precision_macro": 0.8867,
+    "test_recall_macro": 0.8877,
+    "test_f1_macro": 0.8819
+  },
+  "Linear Discriminant Analysis (LDA) - CV Eval": {
+    "notebook": "02_modeling.ipynb",
+    "hyperparameters": {
+      "model": "LDA",
+      "covariance_type": "shared_pooled",
+      "cv_k_splits": 5,
+      "cv_random_seed": 42,
+      "task": "multiclass_classification"
+    },
+    "data_split": {
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_fold1_accuracy": 0.9877,
+    "val_fold1_precision_macro": 0.9666,
+    "val_fold1_recall_macro": 0.9576,
+    "val_fold1_f1_macro": 0.9603,
+    "val_fold2_accuracy": 0.9868,
+    "val_fold2_precision_macro": 0.961,
+    "val_fold2_recall_macro": 0.9516,
+    "val_fold2_f1_macro": 0.9546,
+    "val_fold3_accuracy": 0.9893,
+    "val_fold3_precision_macro": 0.9682,
+    "val_fold3_recall_macro": 0.9633,
+    "val_fold3_f1_macro": 0.9636,
+    "val_fold4_accuracy": 0.9852,
+    "val_fold4_precision_macro": 0.956,
+    "val_fold4_recall_macro": 0.9495,
+    "val_fold4_f1_macro": 0.9494,
+    "val_fold5_accuracy": 0.9893,
+    "val_fold5_precision_macro": 0.9696,
+    "val_fold5_recall_macro": 0.9659,
+    "val_fold5_f1_macro": 0.9663,
+    "cv_fold_train_sizes": [
+      4861,
+      4861,
+      4862,
+      4862,
+      4862
+    ],
+    "cv_fold_val_sizes": [
+      1216,
+      1216,
+      1215,
+      1215,
+      1215
+    ],
+    "val_mean_accuracy": 0.9877,
+    "val_std_accuracy": 0.0016,
+    "val_mean_precision_macro": 0.9643,
+    "val_std_precision_macro": 0.0051,
+    "val_mean_recall_macro": 0.9576,
+    "val_std_recall_macro": 0.0064,
+    "val_mean_f1_macro": 0.9588,
+    "val_std_f1_macro": 0.0061,
+    "test_accuracy": 0.9931,
+    "test_precision_macro": 0.9819,
+    "test_recall_macro": 0.9759,
+    "test_f1_macro": 0.9787
+  },
+  "Quadratic Discriminant Analysis (QDA) - CV Eval": {
+    "notebook": "02_modeling.ipynb",
+    "hyperparameters": {
+      "model": "QDA",
+      "covariance_type": "per_class",
+      "cv_k_splits": 5,
+      "cv_random_seed": 42,
+      "task": "multiclass_classification"
+    },
+    "data_split": {
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_fold1_accuracy": 0.9959,
+    "val_fold1_precision_macro": 0.9855,
+    "val_fold1_recall_macro": 0.9856,
+    "val_fold1_f1_macro": 0.9855,
+    "val_fold2_accuracy": 0.9934,
+    "val_fold2_precision_macro": 0.9783,
+    "val_fold2_recall_macro": 0.9786,
+    "val_fold2_f1_macro": 0.9783,
+    "val_fold3_accuracy": 0.9942,
+    "val_fold3_precision_macro": 0.9799,
+    "val_fold3_recall_macro": 0.9808,
+    "val_fold3_f1_macro": 0.9803,
+    "val_fold4_accuracy": 0.9934,
+    "val_fold4_precision_macro": 0.9774,
+    "val_fold4_recall_macro": 0.9826,
+    "val_fold4_f1_macro": 0.9796,
+    "val_fold5_accuracy": 0.9959,
+    "val_fold5_precision_macro": 0.9855,
+    "val_fold5_recall_macro": 0.9882,
+    "val_fold5_f1_macro": 0.9868,
+    "cv_fold_train_sizes": [
+      4861,
+      4861,
+      4862,
+      4862,
+      4862
+    ],
+    "cv_fold_val_sizes": [
+      1216,
+      1216,
+      1215,
+      1215,
+      1215
+    ],
+    "val_mean_accuracy": 0.9946,
+    "val_std_accuracy": 0.0011,
+    "val_mean_precision_macro": 0.9813,
+    "val_std_precision_macro": 0.0035,
+    "val_mean_recall_macro": 0.9832,
+    "val_std_recall_macro": 0.0034,
+    "val_mean_f1_macro": 0.9821,
+    "val_std_f1_macro": 0.0034,
+    "test_accuracy": 0.9946,
+    "test_precision_macro": 0.9804,
+    "test_recall_macro": 0.9838,
+    "test_f1_macro": 0.9819
+  },
+  "Multiclass Perceptron (OvO) - CV Eval": {
+    "notebook": "02_modeling.ipynb",
+    "hyperparameters": {
+      "estimator": "Perceptron",
+      "strategy": "one_vs_one",
+      "learning_rate": 0.01,
+      "max_iter": 1000,
+      "cv_k_splits": 5,
+      "cv_random_seed": 42,
+      "task": "multiclass_classification"
+    },
+    "data_split": {
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_fold1_accuracy": 0.9934,
+    "val_fold1_precision_macro": 0.9761,
+    "val_fold1_recall_macro": 0.9768,
+    "val_fold1_f1_macro": 0.9764,
+    "val_fold2_accuracy": 0.9951,
+    "val_fold2_precision_macro": 0.9844,
+    "val_fold2_recall_macro": 0.9789,
+    "val_fold2_f1_macro": 0.9811,
+    "val_fold3_accuracy": 0.9934,
+    "val_fold3_precision_macro": 0.9793,
+    "val_fold3_recall_macro": 0.9764,
+    "val_fold3_f1_macro": 0.9772,
+    "val_fold4_accuracy": 0.9951,
+    "val_fold4_precision_macro": 0.9811,
+    "val_fold4_recall_macro": 0.9826,
+    "val_fold4_f1_macro": 0.9818,
+    "val_fold5_accuracy": 0.9975,
+    "val_fold5_precision_macro": 0.9913,
+    "val_fold5_recall_macro": 0.994,
+    "val_fold5_f1_macro": 0.9926,
+    "cv_fold_train_sizes": [
+      4861,
+      4861,
+      4862,
+      4862,
+      4862
+    ],
+    "cv_fold_val_sizes": [
+      1216,
+      1216,
+      1215,
+      1215,
+      1215
+    ],
+    "val_mean_accuracy": 0.9949,
+    "val_std_accuracy": 0.0015,
+    "val_mean_precision_macro": 0.9824,
+    "val_std_precision_macro": 0.0052,
+    "val_mean_recall_macro": 0.9817,
+    "val_std_recall_macro": 0.0065,
+    "val_mean_f1_macro": 0.9818,
+    "val_std_f1_macro": 0.0058,
+    "test_accuracy": 0.9961,
+    "test_precision_macro": 0.9868,
+    "test_recall_macro": 0.986,
+    "test_f1_macro": 0.9864
+  },
+  "Logit (Binary LR, Newton)": {
+    "hyperparameters": {
+      "method": "newton",
+      "max_iter": 100,
+      "task": "binary_classification"
+    },
+    "data_split": {
+      "source": "pre-split CSV (Room_Occupancy_train/val/test.csv)",
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_accuracy": 0.999,
+    "val_precision_binary": 0.9974,
+    "val_recall_binary": 0.9974,
+    "val_f1_binary": 0.9974,
+    "test_accuracy": 0.9995,
+    "test_precision_binary": 1.0,
+    "test_recall_binary": 0.9974,
+    "test_f1_binary": 0.9987
+  },
+  "Probit Regression (GD)": {
+    "hyperparameters": {
+      "learning_rate": 0.5,
+      "max_iter": 2000,
+      "link_function": "probit (Gaussian CDF)",
+      "task": "binary_classification"
+    },
+    "data_split": {
+      "source": "pre-split CSV (Room_Occupancy_train/val/test.csv)",
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_accuracy": 0.998,
+    "val_precision_binary": 0.9922,
+    "val_recall_binary": 0.9974,
+    "val_f1_binary": 0.9948,
+    "test_accuracy": 0.999,
+    "test_precision_binary": 0.9948,
+    "test_recall_binary": 1.0,
+    "test_f1_binary": 0.9974
+  },
+  "Bayesian LR (Laplace Approximation)": {
+    "hyperparameters": {
+      "lambda_reg": 0.1,
+      "method": "newton",
+      "max_iter": 100,
+      "tol": 1e-06,
+      "approximation": "Laplace (2nd-order Taylor of log-posterior)",
+      "prior": "Gaussian N(0, 1/lambda_reg * I), bias unregularized",
+      "task": "binary_classification"
+    },
+    "data_split": {
+      "source": "pre-split CSV (Room_Occupancy_train/val/test.csv)",
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_accuracy": 0.9783,
+    "val_precision_binary": 0.9746,
+    "val_recall_binary": 0.9081,
+    "val_f1_binary": 0.9402,
+    "test_accuracy": 0.9773,
+    "test_precision_binary": 0.9827,
+    "test_recall_binary": 0.8947,
+    "test_f1_binary": 0.9366
+  },
+  "Bayesian LR - 2D PCA Decision Boundary": {
+    "notebook": "03_advanced_bonus_experiments.ipynb",
+    "hyperparameters": {
+      "lambda_reg": 0.1,
+      "method": "newton",
+      "max_iter": 100,
+      "feature_space": "PCA (n_components=2, random_state=42)",
+      "approximation": "Laplace",
+      "task": "binary_classification"
+    },
+    "data_split": {
+      "source": "pre-split CSV (Room_Occupancy_train/val/test.csv)",
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_accuracy": 0.965,
+    "val_precision_binary": 0.9755,
+    "val_recall_binary": 0.8346,
+    "val_f1_binary": 0.8996,
+    "test_accuracy": 0.958,
+    "test_precision_binary": 0.9773,
+    "test_recall_binary": 0.7947,
+    "test_f1_binary": 0.8766
+  },
+  "Linear Logistic Regression (XOR)": {
+    "hyperparameters": {
+      "method": "gd",
+      "learning_rate": 0.1,
+      "max_iter": 1000,
+      "task": "binary_classification",
+      "dataset": "XOR synthetic (400 samples, 2 features + bias, np.random.seed=42)",
+      "note": "No separate test split; accuracy measured on full XOR set"
+    },
+    "data_split": {
+      "source": "Synthetic XOR (np.random.seed=42)",
+      "n_total_samples": 400,
+      "train_indices": "0 to 399",
+      "test_indices": "0 to 399 (same as train)"
+    },
+    "test_accuracy": 0.635
+  },
+  "Kernel Logistic Regression - RBF (XOR)": {
+    "hyperparameters": {
+      "kernel": "RBF",
+      "gamma": 2.0,
+      "lambda_reg": 0.01,
+      "learning_rate": 0.5,
+      "max_iter": 2000,
+      "formulation": "dual (coefficient vector a, Gram matrix K)",
+      "task": "binary_classification",
+      "dataset": "XOR synthetic (400 samples, 2 features, np.random.seed=42)",
+      "note": "No separate test split; accuracy measured on full XOR set"
+    },
+    "data_split": {
+      "source": "Synthetic XOR (np.random.seed=42)",
+      "n_total_samples": 400,
+      "train_indices": "0 to 399",
+      "test_indices": "0 to 399 (same as train)"
+    },
+    "test_accuracy": 0.9725
+  },
+  "Gaussian Naive Bayes": {
+    "hyperparameters": {
+      "model": "GaussianNaiveBayes",
+      "likelihood": "Gaussian per-class diagonal covariance",
+      "conditional_independence": true,
+      "task": "multiclass_classification"
+    },
+    "data_split": {
+      "source": "pre-split CSV (Room_Occupancy_train/val/test.csv)",
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_accuracy": 0.9605,
+    "val_precision_macro": 0.8809,
+    "val_recall_macro": 0.8848,
+    "val_f1_macro": 0.8785,
+    "test_accuracy": 0.963,
+    "test_precision_macro": 0.8854,
+    "test_recall_macro": 0.8827,
+    "test_f1_macro": 0.8809
+  },
+  "Linear Discriminant Analysis (LDA) - Advanced": {
+    "notebook": "03_advanced_bonus_experiments.ipynb",
+    "hyperparameters": {
+      "model": "LinearDiscriminantAnalysis",
+      "covariance_type": "shared_pooled",
+      "task": "multiclass_classification"
+    },
+    "data_split": {
+      "source": "pre-split CSV (Room_Occupancy_train/val/test.csv)",
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "val_accuracy": 0.9936,
+    "val_precision_macro": 0.9788,
+    "val_recall_macro": 0.9785,
+    "val_f1_macro": 0.9784,
+    "test_accuracy": 0.9931,
+    "test_precision_macro": 0.9819,
+    "test_recall_macro": 0.9759,
+    "test_f1_macro": 0.9787
+  },
+  "Noise Robustness Evaluation (Logit vs Probit)": {
+    "hyperparameters": {
+      "logistic_params": {
+        "method": "newton",
+        "max_iter": 100
+      },
+      "probit_params": {
+        "learning_rate": 0.5,
+        "max_iter": 2000
+      },
+      "noise_type": "label-flip on y_train_bin",
+      "task": "binary_classification"
+    },
+    "data_split": {
+      "source": "pre-split CSV (Room_Occupancy_train/val/test.csv)",
+      "train_indices": "0 to 6076",
+      "val_indices": "0 to 2025",
+      "test_indices": "0 to 2025",
+      "n_train": 6077,
+      "n_val": 2026,
+      "n_test": 2026,
+      "cv_random_seed": 42
+    },
+    "results_by_noise_rate": [
+      {
+        "noise_rate": 0.0,
+        "logit_test_accuracy": 0.9995,
+        "probit_test_accuracy": 0.999
+      },
+      {
+        "noise_rate": 0.05,
+        "logit_test_accuracy": 0.998,
+        "probit_test_accuracy": 0.998
+      },
+      {
+        "noise_rate": 0.1,
+        "logit_test_accuracy": 0.998,
+        "probit_test_accuracy": 0.9891
+      },
+      {
+        "noise_rate": 0.15,
+        "logit_test_accuracy": 0.998,
+        "probit_test_accuracy": 0.9946
+      },
+      {
+        "noise_rate": 0.2,
+        "logit_test_accuracy": 0.998,
+        "probit_test_accuracy": 0.9946
+      },
+      {
+        "noise_rate": 0.3,
+        "logit_test_accuracy": 0.997,
+        "probit_test_accuracy": 0.9985
+      }
+    ]
+  }
+}
