@@ -2252,7 +2252,144 @@ class SensitivityAnalyzer:
         return summary, stability
 
     # ------------------------------------------------------------------ #
-    #  3. Automated findings                                              #
+    #  3. Boxplot visualisation                                           #
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def plot_boxplots(df_sens, model_names=None):
+        """
+        Draw grouped boxplots of R² and RMSE for each (model, split ratio).
+
+        OLS / WLS can have extreme outlier values that collapse the scale for
+        the other models.  A percentile-based clipping is applied automatically
+        so that all 5 model distributions remain visible.
+
+        Parameters
+        ----------
+        df_sens    : output of run_experiment()
+        model_names: list of model names (default: DEFAULT_MODELS order)
+        save_path  : if given, save the figure to this path
+        """
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as mpatches
+        import numpy as np
+
+        if model_names is None:
+            model_names = SensitivityAnalyzer.DEFAULT_MODELS
+
+        PALETTE = {
+            'OLS':         '#4C72B0',
+            'Ridge':       '#DD8452',
+            'Lasso':       '#55A868',
+            'Elastic Net': '#C44E52',
+            'WLS':         '#8172B2',
+        }
+
+        train_pcts   = sorted(df_sens['train_pct'].unique())        # e.g. [60, 70, 80]
+        split_labels = [f"{p}% Train" for p in train_pcts]
+        n_splits     = len(train_pcts)
+        n_models     = len(model_names)
+
+        fig, axes = plt.subplots(1, 2, figsize=(18, 7))
+        fig.suptitle(
+            'Sensitivity Analysis — Train/Test Split Ratio\n'
+            'Distribution of R² and RMSE across 20 repeated runs per split',
+            fontsize=14, fontweight='bold'
+        )
+
+        for ax_idx, (metric, ylabel) in enumerate([
+            ('R2',   'R² Score  (higher is better)'),
+            ('RMSE', 'RMSE      (lower is better)'),
+        ]):
+            ax = axes[ax_idx]
+
+            # ── Dynamic clipping ──────────────────────────────────────────
+            all_raw = df_sens[metric].values.astype(float)
+            finite  = all_raw[np.isfinite(all_raw)]
+            clipped = False
+            y_lo, y_hi = None, None
+            if len(finite) > 0:
+                p05 = np.percentile(finite, 5)
+                p95 = np.percentile(finite, 95)
+                span = (p95 - p05) if p95 != p05 else max(abs(p95), 1.0)
+                y_lo = p05 - 0.5 * span
+                y_hi = p95 + 0.5 * span
+                if np.any(all_raw < y_lo) or np.any(all_raw > y_hi) or np.any(~np.isfinite(all_raw)):
+                    clipped = True
+
+            # ── Build box positions ───────────────────────────────────────
+            # Each split group occupies (n_models+1) x-units; models are
+            # spaced 1 unit apart, then 1 blank unit separates groups.
+            group_width = n_models + 1
+            positions   = []
+            tick_pos    = []
+            for g_idx, pct in enumerate(train_pcts):
+                base = g_idx * group_width
+                tick_pos.append(base + (n_models - 1) / 2.0)
+                for m_idx in range(n_models):
+                    positions.append(base + m_idx)
+
+            # ── Collect data in position order ────────────────────────────
+            box_data = []
+            for pct in train_pcts:
+                for model_name in model_names:
+                    vals = (
+                        df_sens[
+                            (df_sens['train_pct'] == pct) &
+                            (df_sens['model'] == model_name)
+                        ][metric]
+                        .values.astype(float)
+                    )
+                    if clipped and y_lo is not None:
+                        vals = np.clip(vals, y_lo, y_hi)
+                    box_data.append(vals)
+
+            # ── Draw boxplots ─────────────────────────────────────────────
+            bp = ax.boxplot(
+                box_data,
+                positions=positions,
+                widths=0.7,
+                patch_artist=True,
+                showfliers=True,
+                flierprops=dict(marker='o', markersize=3, alpha=0.4),
+                medianprops=dict(color='black', linewidth=2),
+            )
+
+            # Color each box by model
+            for patch_idx, patch in enumerate(bp['boxes']):
+                model_name = model_names[patch_idx % n_models]
+                patch.set_facecolor(PALETTE.get(model_name, '#AAAAAA'))
+                patch.set_alpha(0.75)
+
+            # ── Axis decoration ───────────────────────────────────────────
+            ax.set_xticks(tick_pos)
+            ax.set_xticklabels(split_labels, fontsize=11)
+            ax.set_xlabel('Train / Test Split Ratio', fontsize=12)
+            ax.set_ylabel(ylabel, fontsize=12)
+            title = f'{metric} Distribution by Split Ratio'
+            if clipped:
+                title += '\n(extreme outliers clipped for visibility)'
+            ax.set_title(title, fontsize=13, fontweight='bold')
+            ax.grid(True, axis='y', linestyle='--', alpha=0.4)
+
+            # Vertical separators between groups
+            for g_idx in range(1, n_splits):
+                ax.axvline(g_idx * group_width - 0.5, color='grey',
+                           linestyle=':', linewidth=0.8)
+
+        # ── Shared legend ─────────────────────────────────────────────────
+        legend_handles = [
+            mpatches.Patch(facecolor=PALETTE.get(mn, '#AAAAAA'), alpha=0.75, label=mn)
+            for mn in model_names
+        ]
+        fig.legend(handles=legend_handles, loc='lower center',
+                   ncol=n_models, fontsize=10,
+                   bbox_to_anchor=(0.5, -0.04))
+
+        plt.tight_layout(rect=[0, 0.04, 1, 1])
+        plt.show()
+
+    # ------------------------------------------------------------------ #
+    #  4. Automated findings                                              #
     # ------------------------------------------------------------------ #
     @staticmethod
     def print_findings(
@@ -2476,8 +2613,9 @@ class NoiseInjectionAnalyzer:
         return pivot_r2, pivot_rmse, robustness_df
 
     @staticmethod
-    def plot_degradation(df_noise, model_names=None, save_path=None):
+    def plot_degradation(df_noise, model_names=None):
         import matplotlib.pyplot as plt
+        import numpy as np
 
         if model_names is None:
             model_names = NoiseInjectionAnalyzer.DEFAULT_MODELS
@@ -2505,9 +2643,34 @@ class NoiseInjectionAnalyzer:
             ('RMSE', 'RMSE      (lower is better)'),
         ]):
             ax = axes[ax_idx]
+
+            # ------------------------------------------------------------------
+            # Compute dynamic clip bounds so extreme outliers (e.g. OLS/WLS
+            # numerical blow-up under noise) don't crush the other lines.
+            # Strategy: collect all finite values, use 5th-95th percentile
+            # with a 50 % margin as the y-axis window.
+            # ------------------------------------------------------------------
+            all_raw = np.concatenate([
+                df_noise[df_noise['model'] == mn].sort_values('sigma')[metric].values
+                for mn in model_names
+            ]).astype(float)
+            finite_vals = all_raw[np.isfinite(all_raw)]
+            clipped = False
+            y_lo, y_hi = None, None
+            if len(finite_vals) > 0:
+                p05 = np.percentile(finite_vals, 5)
+                p95 = np.percentile(finite_vals, 95)
+                span = (p95 - p05) if p95 != p05 else max(abs(p95), 1.0)
+                y_lo = p05 - 0.5 * span
+                y_hi = p95 + 0.5 * span
+                if np.any(all_raw < y_lo) or np.any(all_raw > y_hi) or np.any(~np.isfinite(all_raw)):
+                    clipped = True
+
             for m_idx, model_name in enumerate(model_names):
-                sub   = df_noise[df_noise['model'] == model_name].sort_values('sigma')
-                vals  = sub[metric].values
+                sub  = df_noise[df_noise['model'] == model_name].sort_values('sigma')
+                vals = sub[metric].values.astype(float)
+                if clipped and y_lo is not None:
+                    vals = np.clip(vals, y_lo, y_hi)
                 color  = PALETTE.get(model_name, '#888888')
                 marker = MARKERS[m_idx % len(MARKERS)]
                 ax.plot(sigma_vals, vals, marker=marker, linewidth=2.2,
@@ -2515,16 +2678,15 @@ class NoiseInjectionAnalyzer:
 
             ax.set_xlabel('Noise Level  (sigma)', fontsize=12)
             ax.set_ylabel(ylabel, fontsize=12)
-            ax.set_title(f'{metric} vs Noise Level', fontsize=13,
-                         fontweight='bold')
+            title = f'{metric} vs Noise Level'
+            if clipped:
+                title += '\n(extreme outliers clipped for visibility)'
+            ax.set_title(title, fontsize=13, fontweight='bold')
             ax.legend(fontsize=10)
             ax.grid(True, linestyle='--', alpha=0.5)
             ax.set_xticks(sigma_vals)
 
         plt.tight_layout()
-        if save_path:
-            plt.savefig(save_path, bbox_inches='tight', dpi=300)
-            print(f"Saved Noise Injection Robustness Test to '{save_path}'")
         plt.show()
 
     @staticmethod

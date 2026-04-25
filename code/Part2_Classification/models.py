@@ -1168,4 +1168,537 @@ class GaussianNaiveBayes:
 #             y_pred.append(self.classes[np.argmax(discriminants)])
 #         return np.array(y_pred)
 
+class ClassificationSensitivityAnalyzer:
+    """
+    Sensitivity Analysis for Classification:
+    evaluates how model performance varies as the train/test split ratio changes.
 
+    Models evaluated: OvR, OvO, Softmax, LDA, QDA
+    Metrics: Accuracy, F1-macro
+    """
+
+    DEFAULT_MODELS = ['OvR', 'OvO', 'Softmax', 'LDA', 'QDA']
+
+    @staticmethod
+    def run_experiment(
+        X: np.ndarray,
+        y: np.ndarray,
+        test_sizes: list = None,
+        n_repeats: int = 20,
+        seed_base: int = 0,
+        verbose: bool = True,
+    ) -> 'pd.DataFrame':
+        """
+        Run the full sensitivity experiment.
+
+        Parameters
+        ----------
+        X          : feature matrix  (N, D), already scaled
+        y          : target vector   (N,) with integer class labels
+        test_sizes : list of test fractions, e.g. [0.4, 0.3, 0.2]
+        n_repeats  : number of random seeds per split ratio
+        seed_base  : first random seed
+        verbose    : print progress
+
+        Returns
+        -------
+        pd.DataFrame with columns:
+            split_label, test_size, train_pct, run, model, Accuracy, F1
+        """
+        from sklearn.model_selection import train_test_split
+        from sklearn.metrics import accuracy_score, f1_score
+
+        if test_sizes is None:
+            test_sizes = [0.4, 0.3, 0.2]
+
+        records = []
+        labels = [f"{int(round((1-ts)*100))}/{int(round(ts*100))}" for ts in test_sizes]
+
+        if verbose:
+            print("  9.1  Sensitivity Analysis - Train/Test Split Ratio")
+            print(f"  Split ratios  : {labels}")
+            print(f"  Repeats/ratio : {n_repeats}")
+            total_fits = len(test_sizes) * n_repeats * len(ClassificationSensitivityAnalyzer.DEFAULT_MODELS)
+            print(f"  Total fits    : {total_fits}")
+            print()
+
+        for test_size in test_sizes:
+            train_pct = int(round((1 - test_size) * 100))
+            label = f"{train_pct}/{int(round(test_size * 100))}"
+
+            for run_idx in range(n_repeats):
+                seed = seed_base + run_idx
+
+                X_tr, X_te, y_tr, y_te = train_test_split(
+                    X, y, test_size=test_size, random_state=seed, stratify=y
+                )
+
+                models_fitted = {
+                    'OvR':    OneVsRestClassifier(
+                                  estimator_cls=BinaryLogisticRegression,
+                                  method='newton', max_iter=50
+                              ),
+                    'OvO':    OneVsOneClassifier(
+                                  estimator_cls=BinaryLogisticRegression,
+                                  method='newton', max_iter=50
+                              ),
+                    'Softmax': SoftmaxRegression(learning_rate=0.1, max_iter=500),
+                    'LDA':    LinearDiscriminantAnalysis(),
+                    'QDA':    QuadraticDiscriminantAnalysis(),
+                }
+
+                for model_name, model in models_fitted.items():
+                    model.fit(X_tr, y_tr)
+                    y_pred = model.predict(X_te)
+                    acc = accuracy_score(y_te, y_pred)
+                    f1  = f1_score(y_te, y_pred, average='macro', zero_division=0)
+                    records.append({
+                        'split_label': label,
+                        'test_size':   test_size,
+                        'train_pct':   train_pct,
+                        'run':         run_idx,
+                        'model':       model_name,
+                        'Accuracy':    acc,
+                        'F1':          f1,
+                    })
+
+            if verbose:
+                print(f"  [Done]  test_size={test_size:.1f}  "
+                      f"({train_pct}% train)  - {n_repeats} runs completed.")
+
+        df_result = pd.DataFrame(records)
+        if verbose:
+            print(f"\n  Total records collected: {len(df_result)}\n")
+        return df_result
+
+    @staticmethod
+    def compute_summary(df_sens: 'pd.DataFrame') -> tuple:
+        """
+        Compute median/std per (model, train_pct) and a stability ranking.
+
+        Returns
+        -------
+        summary   : DataFrame
+        stability : DataFrame — models ranked by average std(Accuracy)
+        """
+        summary = (
+            df_sens
+            .groupby(['model', 'train_pct'])
+            .agg(
+                median_Accuracy=('Accuracy', 'median'),
+                std_Accuracy=('Accuracy', 'std'),
+                median_F1=('F1', 'median'),
+                std_F1=('F1', 'std'),
+            )
+            .reset_index()
+            .sort_values(['model', 'train_pct'])
+        )
+
+        stability = (
+            summary
+            .groupby('model')['std_Accuracy']
+            .mean()
+            .reset_index()
+            .rename(columns={'std_Accuracy': 'avg_std_Accuracy'})
+            .sort_values('avg_std_Accuracy')
+            .reset_index(drop=True)
+        )
+        stability['rank'] = range(1, len(stability) + 1)
+
+        print("  Summary: Median Accuracy and F1-macro across repeated runs")
+        print(summary.to_string(index=False, float_format=lambda x: f"{x:.4f}"))
+
+        print("\n  Stability Ranking  (lower avg std(Accuracy) -> more stable)")
+        for _, row in stability.iterrows():
+            tag = ("[ Most stable ]"  if row['rank'] == 1
+                   else "[ Least stable ]" if row['rank'] == len(stability)
+                   else "")
+            print(f"  #{int(row['rank'])}  {row['model']:<12}  "
+                  f"avg std(Accuracy) = {row['avg_std_Accuracy']:.6f}  {tag}")
+
+        return summary, stability
+
+    @staticmethod
+    def plot_boxplots(df_sens, model_names=None):
+        """
+        Draw grouped boxplots of Accuracy and F1-macro for each
+        (model, split ratio) combination.
+        """
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as mpatches
+
+        if model_names is None:
+            model_names = ClassificationSensitivityAnalyzer.DEFAULT_MODELS
+
+        PALETTE = {
+            'OvR':     '#4C72B0',
+            'OvO':     '#DD8452',
+            'Softmax': '#55A868',
+            'LDA':     '#C44E52',
+            'QDA':     '#8172B2',
+        }
+
+        train_pcts   = sorted(df_sens['train_pct'].unique())
+        split_labels = [f"{p}% Train" for p in train_pcts]
+        n_splits     = len(train_pcts)
+        n_models     = len(model_names)
+
+        fig, axes = plt.subplots(1, 2, figsize=(18, 7))
+        fig.suptitle(
+            'Sensitivity Analysis - Train/Test Split Ratio\n'
+            'Distribution of Accuracy and F1-macro across repeated runs per split',
+            fontsize=14, fontweight='bold'
+        )
+
+        for ax_idx, (metric, ylabel) in enumerate([
+            ('Accuracy', 'Accuracy  (higher is better)'),
+            ('F1',       'F1-macro  (higher is better)'),
+        ]):
+            ax = axes[ax_idx]
+            group_width = n_models + 1
+            positions   = []
+            tick_pos    = []
+            for g_idx in range(n_splits):
+                base = g_idx * group_width
+                tick_pos.append(base + (n_models - 1) / 2.0)
+                for mi in range(n_models):
+                    positions.append(base + mi)
+
+            box_data = []
+            for pct in train_pcts:
+                for model_name in model_names:
+                    vals = (
+                        df_sens[
+                            (df_sens['train_pct'] == pct) &
+                            (df_sens['model'] == model_name)
+                        ][metric].values.astype(float)
+                    )
+                    box_data.append(vals)
+
+            bp = ax.boxplot(
+                box_data,
+                positions=positions,
+                widths=0.7,
+                patch_artist=True,
+                showfliers=True,
+                flierprops=dict(marker='o', markersize=3, alpha=0.4),
+                medianprops=dict(color='black', linewidth=2),
+            )
+
+            for patch_idx, patch in enumerate(bp['boxes']):
+                model_name = model_names[patch_idx % n_models]
+                patch.set_facecolor(PALETTE.get(model_name, '#AAAAAA'))
+                patch.set_alpha(0.75)
+
+            ax.set_xticks(tick_pos)
+            ax.set_xticklabels(split_labels, fontsize=11)
+            ax.set_xlabel('Train / Test Split Ratio', fontsize=12)
+            ax.set_ylabel(ylabel, fontsize=12)
+            ax.set_title(f'{metric} Distribution by Split Ratio',
+                         fontsize=13, fontweight='bold')
+            ax.grid(True, axis='y', linestyle='--', alpha=0.4)
+            for g_idx in range(1, n_splits):
+                ax.axvline(g_idx * group_width - 0.5, color='grey',
+                           linestyle=':', linewidth=0.8)
+
+        legend_handles = [
+            mpatches.Patch(facecolor=PALETTE.get(mn, '#AAAAAA'), alpha=0.75, label=mn)
+            for mn in model_names
+        ]
+        fig.legend(handles=legend_handles, loc='lower center',
+                   ncol=n_models, fontsize=10,
+                   bbox_to_anchor=(0.5, -0.04))
+
+        plt.tight_layout(rect=[0, 0.04, 1, 1])
+        plt.show()
+
+    @staticmethod
+    def print_findings(df_sens: 'pd.DataFrame', stability: 'pd.DataFrame') -> None:
+        """Print an automated interpretation of the sensitivity results."""
+        print("  9.1  Sensitivity Analysis - Key Findings")
+
+        train_pcts  = sorted(df_sens['train_pct'].unique())
+        model_names = ClassificationSensitivityAnalyzer.DEFAULT_MODELS
+
+        smallest_pct = min(train_pcts)
+        df_hard = df_sens[df_sens['train_pct'] == smallest_pct]
+        best_acc = (
+            df_hard.groupby('model')['Accuracy']
+            .median()
+            .sort_values(ascending=False)
+        )
+        print(f"\n  Best median Accuracy at {smallest_pct}% training data (hardest split):")
+        for model, acc in best_acc.items():
+            print(f"    {model:<12}:  Accuracy = {acc:.4f}")
+
+        most_stable  = stability.iloc[0]['model']
+        least_stable = stability.iloc[-1]['model']
+        print(f"\n  Most stable model  : {most_stable} "
+              f"  (avg sigma(Acc) = {stability.iloc[0]['avg_std_Accuracy']:.5f})")
+        print(f"  Least stable model : {least_stable} "
+              f"  (avg sigma(Acc) = {stability.iloc[-1]['avg_std_Accuracy']:.5f})")
+
+        largest_pct = max(train_pcts)
+        print(f"\n  Accuracy drop from {largest_pct}% -> {smallest_pct}% train:")
+        for model_name in model_names:
+            acc_max = df_sens[
+                (df_sens['model'] == model_name) &
+                (df_sens['train_pct'] == largest_pct)
+            ]['Accuracy'].median()
+            acc_min = df_sens[
+                (df_sens['model'] == model_name) &
+                (df_sens['train_pct'] == smallest_pct)
+            ]['Accuracy'].median()
+            drop = acc_max - acc_min
+            flag = ("robust"   if drop < 0.005 else
+                    "moderate" if drop < 0.02  else "sensitive")
+            print(f"    {model_name:<12}:  Delta Acc = {drop:+.4f}  [{flag}]")
+
+        print(f"\n  Conclusion")
+        print(f"  - '{most_stable}' is the most stable model across all split ratios.")
+        print(f"  - '{least_stable}' shows the highest variance in Accuracy.")
+        print("  - Recommendation: prefer models with narrow boxplots and stable")
+        print("    median Accuracy, especially when training data is limited.\n")
+
+class ClassificationNoiseAnalyzer:
+    """
+    Noise Injection Analysis for Classification:
+    trains on clean data, evaluates on Gaussian-noised test features.
+
+    Models evaluated: OvR, OvO, Softmax, LDA, QDA
+    Metrics: Accuracy, F1-macro
+    """
+
+    DEFAULT_MODELS = ['OvR', 'OvO', 'Softmax', 'LDA', 'QDA']
+
+    @staticmethod
+    def run_experiment(
+        X_train: np.ndarray,
+        y_train: np.ndarray,
+        X_test: np.ndarray,
+        y_test: np.ndarray,
+        sigmas: list = None,
+        seed: int = 42,
+        verbose: bool = True,
+    ) -> 'pd.DataFrame':
+        """
+        Train models on clean data, evaluate on noised test data.
+
+        Parameters
+        ----------
+        X_train, y_train : clean training set (already standardized)
+        X_test,  y_test  : clean test set (already standardized)
+        sigmas           : list of noise std, e.g. [0.0, 0.1, 0.5, 1.0]
+        seed             : random seed for noise generation
+        verbose          : print progress
+
+        Returns
+        -------
+        pd.DataFrame with columns: sigma, model, Accuracy, F1
+        """
+        from sklearn.metrics import accuracy_score, f1_score
+
+        if sigmas is None:
+            sigmas = [0.0, 0.1, 0.5, 1.0]
+
+        if verbose:
+            print("  9.2  Noise Injection Analysis - Robustness Test")
+            print(f"  Training set : {X_train.shape[0]} samples (clean, no noise)")
+            print(f"  Test set     : {X_test.shape[0]} samples (noise added per level)")
+            print(f"  Sigma levels : {sigmas}")
+            print()
+
+        # Train once on clean data
+        models_fitted = {
+            'OvR':    OneVsRestClassifier(
+                          estimator_cls=BinaryLogisticRegression,
+                          method='newton', max_iter=50
+                      ),
+            'OvO':    OneVsOneClassifier(
+                          estimator_cls=BinaryLogisticRegression,
+                          method='newton', max_iter=50
+                      ),
+            'Softmax': SoftmaxRegression(learning_rate=0.1, max_iter=500),
+            'LDA':    LinearDiscriminantAnalysis(),
+            'QDA':    QuadraticDiscriminantAnalysis(),
+        }
+        for model in models_fitted.values():
+            model.fit(X_train, y_train)
+
+        rng = np.random.default_rng(seed)
+        records = []
+
+        for sigma in sigmas:
+            if sigma == 0.0:
+                X_noised = X_test.copy()
+            else:
+                noise = rng.normal(loc=0.0, scale=sigma, size=X_test.shape)
+                X_noised = X_test + noise
+
+            for model_name, model in models_fitted.items():
+                y_pred = model.predict(X_noised)
+                acc = accuracy_score(y_test, y_pred)
+                f1  = f1_score(y_test, y_pred, average='macro', zero_division=0)
+                records.append({
+                    'sigma':    sigma,
+                    'model':    model_name,
+                    'Accuracy': acc,
+                    'F1':       f1,
+                })
+
+            if verbose:
+                print(f"  [Done]  sigma = {sigma:.2f}  -- all models evaluated.")
+
+        df_result = pd.DataFrame(records)
+        if verbose:
+            print(f"\n  Total records: {len(df_result)}\n")
+        return df_result
+
+    @staticmethod
+    def compute_summary(df_noise: 'pd.DataFrame') -> tuple:
+        """
+        Pivot Accuracy/F1 by (model, sigma) and rank models by robustness.
+
+        Returns
+        -------
+        pivot_acc  : DataFrame
+        pivot_f1   : DataFrame
+        robustness : DataFrame — models ranked by Accuracy drop (ascending)
+        """
+        pivot_acc = df_noise.pivot(index='model', columns='sigma', values='Accuracy')
+        pivot_f1  = df_noise.pivot(index='model', columns='sigma', values='F1')
+
+        sigma_min = df_noise['sigma'].min()
+        sigma_max = df_noise['sigma'].max()
+        base_acc  = pivot_acc[sigma_min]
+        end_acc   = pivot_acc[sigma_max]
+
+        robustness = pd.DataFrame({
+            'model':          pivot_acc.index,
+            'base_Accuracy':  base_acc.values,
+            'final_Accuracy': end_acc.values,
+            'Acc_drop':       (base_acc - end_acc).values,
+        }).sort_values('Acc_drop').reset_index(drop=True)
+        robustness['rank'] = range(1, len(robustness) + 1)
+
+        print("  Accuracy pivot table (rows=model, cols=sigma):")
+        print(pivot_acc.to_string(float_format=lambda x: f"{x:.4f}"))
+        print("\n  Robustness Ranking  (smaller drop -> more robust):")
+        for _, row in robustness.iterrows():
+            tag = ("[ Most robust ]"  if row['rank'] == 1
+                   else "[ Least robust ]" if row['rank'] == len(robustness)
+                   else "")
+            print(f"  #{int(row['rank'])}  {row['model']:<12}  "
+                  f"Acc drop = {row['Acc_drop']:+.4f}  {tag}")
+
+        return pivot_acc, pivot_f1, robustness
+
+    @staticmethod
+    def plot_degradation(df_noise, model_names=None):
+        """
+        Plot Accuracy and F1-macro vs Noise Level (sigma) for each model.
+        """
+        import matplotlib.pyplot as plt
+
+        if model_names is None:
+            model_names = ClassificationNoiseAnalyzer.DEFAULT_MODELS
+
+        PALETTE = {
+            'OvR':     '#4C72B0',
+            'OvO':     '#DD8452',
+            'Softmax': '#55A868',
+            'LDA':     '#C44E52',
+            'QDA':     '#8172B2',
+        }
+        MARKERS = ['o', 's', '^', 'D', 'v']
+
+        sigma_vals = sorted(df_noise['sigma'].unique())
+
+        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+        fig.suptitle(
+            'Noise Injection Robustness Test\n'
+            'Train on clean data - Test on Gaussian-noised features',
+            fontsize=15, fontweight='bold'
+        )
+
+        for ax_idx, (metric, ylabel) in enumerate([
+            ('Accuracy', 'Accuracy  (higher is better)'),
+            ('F1',       'F1-macro  (higher is better)'),
+        ]):
+            ax = axes[ax_idx]
+
+            all_raw = np.concatenate([
+                df_noise[df_noise['model'] == mn].sort_values('sigma')[metric].values
+                for mn in model_names
+            ]).astype(float)
+            finite_vals = all_raw[np.isfinite(all_raw)]
+            clipped = False
+            y_lo, y_hi = None, None
+            if len(finite_vals) > 0:
+                p05 = np.percentile(finite_vals, 5)
+                p95 = np.percentile(finite_vals, 95)
+                span = (p95 - p05) if p95 != p05 else max(abs(p95), 0.01)
+                y_lo = p05 - 0.5 * span
+                y_hi = p95 + 0.5 * span
+                if (np.any(all_raw < y_lo) or np.any(all_raw > y_hi)
+                        or np.any(~np.isfinite(all_raw))):
+                    clipped = True
+
+            for m_idx, model_name in enumerate(model_names):
+                sub  = df_noise[df_noise['model'] == model_name].sort_values('sigma')
+                vals = sub[metric].values.astype(float)
+                if clipped and y_lo is not None:
+                    vals = np.clip(vals, y_lo, y_hi)
+                color  = PALETTE.get(model_name, '#888888')
+                marker = MARKERS[m_idx % len(MARKERS)]
+                ax.plot(sigma_vals, vals, marker=marker, linewidth=2.2,
+                        markersize=8, color=color, label=model_name)
+
+            ax.set_xlabel('Noise Level  (sigma)', fontsize=12)
+            ax.set_ylabel(ylabel, fontsize=12)
+            title = f'{metric} vs Noise Level'
+            if clipped:
+                title += '\n(extreme outliers clipped for visibility)'
+            ax.set_title(title, fontsize=13, fontweight='bold')
+            ax.legend(fontsize=10)
+            ax.grid(True, linestyle='--', alpha=0.5)
+            ax.set_xticks(sigma_vals)
+
+        plt.tight_layout()
+        plt.show()
+
+    @staticmethod
+    def print_findings(df_noise: 'pd.DataFrame', robustness: 'pd.DataFrame') -> None:
+        """Print an automated interpretation of the noise injection results."""
+        sigma_vals   = sorted(df_noise['sigma'].unique())
+        sigma_min    = min(sigma_vals)
+        sigma_max    = max(sigma_vals)
+        most_robust  = robustness.iloc[0]['model']
+        least_robust = robustness.iloc[-1]['model']
+        model_names  = ClassificationNoiseAnalyzer.DEFAULT_MODELS
+
+        print("  9.2  Noise Injection - Key Findings")
+
+        df_base = df_noise[df_noise['sigma'] == sigma_min]
+        df_max  = df_noise[df_noise['sigma'] == sigma_max]
+
+        print(f"\n  Baseline Accuracy (sigma={sigma_min}, no noise):")
+        for model_name in model_names:
+            acc = df_base[df_base['model'] == model_name]['Accuracy'].values[0]
+            print(f"    {model_name:<12}:  Accuracy = {acc:.4f}")
+
+        print(f"\n  Accuracy at sigma={sigma_max:.1f} (highest noise):")
+        for model_name in model_names:
+            acc_now  = df_max[df_max['model'] == model_name]['Accuracy'].values[0]
+            acc_base = df_base[df_base['model'] == model_name]['Accuracy'].values[0]
+            drop     = acc_base - acc_now
+            flag     = ("robust"   if drop < 0.01 else
+                        "moderate" if drop < 0.05 else "sensitive")
+            print(f"    {model_name:<12}:  Accuracy = {acc_now:.4f}  "
+                  f"(drop = {drop:+.4f})  [{flag}]")
+
+        print(f"\n  Conclusion")
+        print(f"  - '{most_robust}' is the most robust model.")
+        print(f"  - '{least_robust}' is the most sensitive model.")
+        print("  - Recommendation: prefer models that maintain high accuracy")
+        print("    under sigma >= 0.5 when deploying in noisy environments.\n")
