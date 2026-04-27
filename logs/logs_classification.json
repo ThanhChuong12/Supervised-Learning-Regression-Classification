@@ -974,7 +974,7 @@
       {
         "noise_rate": 0.2,
         "logit_test_accuracy": 0.998,
-        "probit_test_accuracy": 0.9946
+        "probit_test_accuracy": 0.8722
       },
       {
         "noise_rate": 0.3,

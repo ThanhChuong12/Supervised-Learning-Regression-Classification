@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import tracemalloc
 from sklearn.model_selection import KFold
 from scipy.spatial.distance import cdist
 from scipy.stats import ttest_rel, wilcoxon as scipy_wilcoxon
@@ -290,12 +291,11 @@ class LinearRegression:
     @staticmethod
     def fit_lasso_cd(Phi: np.ndarray, y: np.ndarray, lam: float, num_iters: int = 1000, tol: float = 1e-4, bias_is_first: bool = True, w_init: np.ndarray = None) -> np.ndarray:
         n_samples, n_features = Phi.shape
-
-        # Use w_init if provided, otherwise initialize with zeros
         w = np.zeros(n_features) if w_init is None else w_init.copy()
-
-        # z is the sum of squares of the elements in each column of matrix Phi
         z = np.sum(Phi**2, axis=0)
+        
+        # BƯỚC 1: Tính y_pred một lần duy nhất trước khi vào vòng lặp
+        y_pred = Phi @ w
 
         for _ in range(num_iters):
             w_old = w.copy()
@@ -304,32 +304,36 @@ class LinearRegression:
                 if z[j] == 0:
                     continue
 
-                # compute the current prediction error
-                y_pred = Phi @ w
-
-                # rho_j is the correlation between feature j and the residual (temporarily excluding w_j)
+                # BƯỚC 2: Tạm loại bỏ w[j] khỏi tính toán tương quan (tiết kiệm cực nhiều phép tính)
                 rho_j = Phi[:, j].T @ (y - y_pred) + w[j] * z[j]
 
-                # the first column (bias) is not penalized, other columns go through soft-thresholding
+                # Soft thresholding
                 if bias_is_first and j == 0:
-                    w[j] = rho_j / z[j]
+                    w_new_j = rho_j / z[j]
                 else:
-                    w[j] = LinearRegression.soft_threshold(rho_j, lam) / z[j]
+                    w_new_j = LinearRegression.soft_threshold(rho_j, lam) / z[j]
 
-            # stop the algorithm if the change in w is very small (converged)
+                # BƯỚC 3: Cập nhật nhanh trực tiếp vào y_pred nếu có sự thay đổi trọng số
+                if w_new_j != w[j]:
+                    y_pred += Phi[:, j] * (w_new_j - w[j])
+                    w[j] = w_new_j
+
             if np.max(np.abs(w - w_old)) < tol:
                 break
 
         return w
 
     @staticmethod
-    def fit_elastic_net_cd(Phi: np.ndarray, y: np.ndarray, lam1: float, lam2: float, num_iters: int = 1000, tol: float = 1e-4, bias_is_first: bool = True) -> np.ndarray:
+    def fit_elastic_net_cd(Phi: np.ndarray, y: np.ndarray, lam1: float, lam2: float, num_iters: int = 1000, tol: float = 1e-4, bias_is_first: bool = True, w_init: np.ndarray = None) -> np.ndarray:
         # implement Elastic Net using Coordinate Descent
         n_samples, n_features = Phi.shape
-        w = np.zeros(n_features)
+        w = np.zeros(n_features) if w_init is None else w_init.copy()
 
         # z is the sum of squares of the elements in each column
         z = np.sum(Phi**2, axis=0)
+        
+        # BƯỚC 1: Tính y_pred một lần duy nhất trước khi vào vòng lặp
+        y_pred = Phi @ w
 
         for _ in range(num_iters):
             w_old = w.copy()
@@ -337,18 +341,19 @@ class LinearRegression:
             for j in range(n_features):
                 if z[j] == 0: continue
 
-                # compute the current prediction error
-                y_pred = Phi @ w
-
-                # rho_j is the correlation between feature j and the residual error
+                # BƯỚC 2: Tạm loại bỏ w[j] khỏi tính toán tương quan (tiết kiệm cực nhiều phép tính)
                 rho_j = Phi[:, j].T @ (y - y_pred) + w[j] * z[j]
 
+                # Soft thresholding
                 if bias_is_first and j == 0:
-                    # the intercept term is not penalized
-                    w[j] = rho_j / z[j]
+                    w_new_j = rho_j / z[j]
                 else:
-                    # numerator applies L1 penalty, denominator adds L2 penalty
-                    w[j] = LinearRegression.soft_threshold(rho_j, lam1) / (z[j] + lam2)
+                    w_new_j = LinearRegression.soft_threshold(rho_j, lam1) / (z[j] + lam2)
+
+                # BƯỚC 3: Cập nhật nhanh trực tiếp vào y_pred nếu có sự thay đổi trọng số
+                if w_new_j != w[j]:
+                    y_pred += Phi[:, j] * (w_new_j - w[j])
+                    w[j] = w_new_j
 
             # stop the algorithm if the weights change very little
             if np.max(np.abs(w - w_old)) < tol: break
@@ -605,6 +610,287 @@ class LinearRegression:
 
         return results
 
+    @staticmethod
+    def run_grid_search_cv(Phi_train, y_train, model_class, lam_grid=None, k_folds=10, num_iters_lasso=500):
+        if lam_grid is None:
+            lam_grid = np.logspace(3, -4, 50)
+            
+        folds = model_class.time_series_cv_indices(len(Phi_train), k=k_folds)
+        ridge_cv_mses = []
+        lasso_cv_mses = []
+        w_inits_lasso = [None] * k_folds
+        print(f"Running {k_folds}-Fold CV (Grid Search + Warm Start)...")
+        tracemalloc.start()
+        t0_cv = time.time()
+        for idx, lam in enumerate(lam_grid):
+            print(f" Processing Lambda {idx + 1}/{len(lam_grid)} (log10(λ) = {np.log10(lam):.2f})...", end='\r')
+            mse_r_folds, mse_l_folds = [], []
+            for i, (train_idx, val_idx) in enumerate(folds):
+                Phi_tr, y_tr = Phi_train[train_idx], y_train[train_idx]
+                Phi_va, y_va = Phi_train[val_idx], y_train[val_idx]
+                # Ridge Regression
+                w_r = model_class.fit_ridge(Phi_tr, y_tr, lam, bias_is_first=True)
+                mse_r_folds.append(model_class.mse(y_va, Phi_va @ w_r))
+                # Lasso Regression
+                w_l = model_class.fit_lasso_cd(Phi_tr, y_tr, lam, num_iters=num_iters_lasso, bias_is_first=True, w_init=w_inits_lasso[i])
+                w_inits_lasso[i] = w_l.copy()
+                mse_l_folds.append(model_class.mse(y_va, Phi_va @ w_l))
+            ridge_cv_mses.append(np.mean(mse_r_folds))
+            lasso_cv_mses.append(np.mean(mse_l_folds))
+        print("Processed all Lambda values!                             ")
+        
+        elapsed_time = (time.time() - t0_cv) / 2
+        mem_mb = tracemalloc.get_traced_memory()[1] / 1024**2
+        tracemalloc.stop()
+        best_lam_ridge = lam_grid[np.argmin(ridge_cv_mses)]
+        best_lam_lasso = lam_grid[np.argmin(lasso_cv_mses)]
+        print("\n=> Optimal Ridge Lambda : {:.5f} (log10 = {:.2f})".format(best_lam_ridge, np.log10(best_lam_ridge)))
+        print("=> Optimal Lasso Lambda : {:.5f} (log10 = {:.2f})".format(best_lam_lasso, np.log10(best_lam_lasso)))
+        
+        return best_lam_ridge, best_lam_lasso, ridge_cv_mses, lasso_cv_mses, elapsed_time, mem_mb
+
+    @staticmethod
+    def run_elastic_net_grid_search_cv(Phi_train, y_train, model_class, l1_vals=None, l2_vals=None, k_folds=5, num_iters=500):
+        if l1_vals is None:
+            l1_vals = np.logspace(-2, 4, 12)
+        if l2_vals is None:
+            l2_vals = np.logspace(-2, 4, 12)
+            
+        mse_matrix = np.zeros((len(l1_vals), len(l2_vals)))
+        folds_enet = model_class.time_series_cv_indices(len(Phi_train), k=k_folds)
+        
+        best_mse = float('inf')
+        best_l1, best_l2 = 0, 0
+        
+        w_inits = [None] * k_folds
+        
+        tracemalloc.start()
+        t0_cv = time.time()
+        print("Scanning 2D grid for the optimal Elastic Net parameters...")
+        
+        for i, l1 in enumerate(l1_vals):
+            for j, l2 in enumerate(l2_vals):
+                fold_mses = []
+                for f_idx, (train_idx, val_idx) in enumerate(folds_enet):
+                    Phi_tr, y_tr = Phi_train[train_idx], y_train[train_idx]
+                    Phi_va, y_va = Phi_train[val_idx], y_train[val_idx]
+
+                    w_enet = model_class.fit_elastic_net_cd(
+                        Phi_tr, y_tr, lam1=l1, lam2=l2, 
+                        num_iters=num_iters, bias_is_first=True, 
+                        w_init=w_inits[f_idx]
+                    )
+                    w_inits[f_idx] = w_enet.copy()
+                    
+                    y_pred = Phi_va @ w_enet
+                    fold_mses.append(model_class.mse(y_va, y_pred))
+
+                avg_mse = np.mean(fold_mses)
+                mse_matrix[i, j] = avg_mse
+                if avg_mse < best_mse:
+                    best_mse, best_l1, best_l2 = avg_mse, l1, l2
+
+        elapsed_time = time.time() - t0_cv
+        mem_mb = tracemalloc.get_traced_memory()[1] / 1024**2
+        tracemalloc.stop()
+
+        print(f"=> Optimal combination: log10(L1) = {np.log10(best_l1):.4f} | log10(L2) = {np.log10(best_l2):.4f}")
+        print(f"   (Equivalent real values: L1 = {best_l1:.4f}, L2 = {best_l2:.4f})")
+        
+        return best_l1, best_l2, mse_matrix, elapsed_time, mem_mb
+
+    @staticmethod
+    def run_sigmoid_ridge_pipeline(X_train_s, y_train, X_val_s, y_val, X_test_s, y_test, M=5, slope=2.0, lam=1.0):
+        N_tr, D = X_train_s.shape
+
+        # Choose centers from train distribution (quantiles in scaled space)
+        qs = np.linspace(0.1, 0.9, M)
+        centers = np.zeros((D, M), dtype=float)
+        for d in range(D):
+            centers[d] = np.quantile(X_train_s[:, d], qs)
+
+        Phi_train = BasisExpansion.make_sigmoid_basis(X_train_s, centers=centers, slope=slope, include_linear=True, include_bias=True)
+        Phi_val   = BasisExpansion.make_sigmoid_basis(X_val_s,   centers=centers, slope=slope, include_linear=True, include_bias=True)
+        Phi_test  = BasisExpansion.make_sigmoid_basis(X_test_s,  centers=centers, slope=slope, include_linear=True, include_bias=True)
+
+        print("Design matrix shapes:")
+        print("- Phi_train:", Phi_train.shape)
+        print("- Phi_val  :", Phi_val.shape)
+        print("- Phi_test :", Phi_test.shape)
+
+        tracemalloc.start()
+        t0 = time.time()
+        
+        w = LinearRegression.fit_ridge_closed_form(Phi_train, y_train, lam=lam, bias_is_first=True)
+        
+        elapsed_time = time.time() - t0
+        mem_mb = tracemalloc.get_traced_memory()[1] / 1024**2
+        tracemalloc.stop()
+
+        pred_train = LinearRegression.predict(Phi_train, w)
+        pred_val   = LinearRegression.predict(Phi_val, w)
+        pred_test  = LinearRegression.predict(Phi_test, w)
+
+        m_train = LinearRegression.metrics(y_train, pred_train)
+        m_val   = LinearRegression.metrics(y_val, pred_val)
+        m_test  = LinearRegression.metrics(y_test, pred_test)
+
+        print("\nMetrics (Sigmoid basis + Ridge closed-form)")
+        print("- Train:", m_train)
+        print("- Val  :", m_val)
+        print("- Test :", m_test)
+
+        return w, Phi_train, Phi_val, Phi_test, pred_train, pred_val, pred_test, m_train, m_val, m_test, elapsed_time, mem_mb
+
+    @staticmethod
+    def run_basis_validation_curves(X_train_s, y_train, X_val_s, y_val, lam=1.0, 
+                                    poly_degrees=None, rbf_Ks=None, sig_Ms=None, spline_knots=None):
+        if poly_degrees is None: poly_degrees = [1, 2, 3, 4, 5]
+        if rbf_Ks is None: rbf_Ks = [10, 25, 50, 100]
+        if sig_Ms is None: sig_Ms = [2, 3, 5, 7]
+        if spline_knots is None: spline_knots = [3, 5, 7, 10]
+        
+        rng = np.random.default_rng(0)
+        
+        tracemalloc.start()
+        t0 = time.time()
+
+        # Polynomial: vary degree
+        poly_val_mse = []
+        for d in poly_degrees:
+            basis = {'poly_degree': d, 'rbf': None, 'sigmoid': None, 'spline': None}
+            Phi_tr = BasisExpansion.make_design_matrix(X_train_s, basis=basis, add_linear=True)
+            Phi_va = BasisExpansion.make_design_matrix(X_val_s, basis=basis, add_linear=True)
+            w = LinearRegression.fit_ridge(Phi_tr, y_train, lam=lam)
+            poly_val_mse.append(LinearRegression.mse(y_val, Phi_va @ w))
+
+        # RBF: vary number of centers K
+        rbf_val_mse = []
+        for K in rbf_Ks:
+            take = min(K, X_train_s.shape[0])
+            idx_c = rng.choice(X_train_s.shape[0], size=take, replace=False)
+            centers = X_train_s[idx_c]
+
+            cc = centers
+            if cc.shape[0] >= 2:
+                sample = cc[rng.choice(cc.shape[0], size=min(200, cc.shape[0]), replace=False)]
+                d2 = np.sum((sample[:, None, :] - sample[None, :, :]) ** 2, axis=2)
+                med = np.median(d2[d2 > 0]) if np.any(d2 > 0) else 1.0
+            else:
+                med = 1.0
+            gamma = 1.0 / (2.0 * med)
+
+            basis = {'poly_degree': None, 'rbf': {'centers': centers, 'gamma': gamma}, 'sigmoid': None, 'spline': None}
+            Phi_tr = BasisExpansion.make_design_matrix(X_train_s, basis=basis, add_linear=True)
+            Phi_va = BasisExpansion.make_design_matrix(X_val_s, basis=basis, add_linear=True)
+            w = LinearRegression.fit_ridge(Phi_tr, y_train, lam=lam)
+            rbf_val_mse.append(LinearRegression.mse(y_val, Phi_va @ w))
+
+        # Sigmoid: vary M (number of sigmoids per feature)
+        sig_val_mse = []
+        for M in sig_Ms:
+            qs = np.linspace(0.1, 0.9, M)
+            D = X_train_s.shape[1]
+            centers_pf = np.zeros((D, M), dtype=float)
+            for d in range(D):
+                centers_pf[d] = np.quantile(X_train_s[:, d], qs)
+            basis = {'poly_degree': None, 'rbf': None, 'sigmoid': {'centers': centers_pf, 'slope': 2.0}, 'spline': None}
+            Phi_tr = BasisExpansion.make_design_matrix(X_train_s, basis=basis, add_linear=True)
+            Phi_va = BasisExpansion.make_design_matrix(X_val_s, basis=basis, add_linear=True)
+            w = LinearRegression.fit_ridge(Phi_tr, y_train, lam=lam)
+            sig_val_mse.append(LinearRegression.mse(y_val, Phi_va @ w))
+
+        # Splines (Cubic): vary n_knots
+        spline_val_mse = []
+        for k in spline_knots:
+            basis = {'poly_degree': None, 'rbf': None, 'sigmoid': None, 'spline': {'n_knots': k, 'degree': 3}}
+            Phi_tr = BasisExpansion.make_design_matrix(X_train_s, basis=basis, add_linear=True)
+            Phi_va = BasisExpansion.make_design_matrix(X_val_s, basis=basis, add_linear=True)
+            w = LinearRegression.fit_ridge(Phi_tr, y_train, lam=lam)
+            spline_val_mse.append(LinearRegression.mse(y_val, Phi_va @ w))
+            
+        elapsed_time = time.time() - t0
+        mem_mb = tracemalloc.get_traced_memory()[1] / 1024**2
+        tracemalloc.stop()
+
+        print('Validation MSE summary:')
+        print('- Polynomial:', dict(zip(poly_degrees, poly_val_mse)))
+        print('- RBF       :', dict(zip(rbf_Ks, rbf_val_mse)))
+        print('- Sigmoid   :', dict(zip(sig_Ms, sig_val_mse)))
+        print('- Splines   :', dict(zip(spline_knots, spline_val_mse)))
+
+        return (poly_degrees, poly_val_mse, 
+                rbf_Ks, rbf_val_mse, 
+                sig_Ms, sig_val_mse, 
+                spline_knots, spline_val_mse, 
+                elapsed_time, mem_mb)
+
+    @staticmethod
+    def run_basis_ablation_study(X_train_s, y_train, X_val_s, y_val, X_test_s, y_test, 
+                                 best_poly_degree, best_rbf_K, best_sig_M, best_spline_knots, lam=1.0):
+        rng = np.random.default_rng(0)
+        
+        tracemalloc.start()
+        t0 = time.time()
+
+        # rebuild best RBF parameters
+        idx_c = rng.choice(X_train_s.shape[0], size=min(best_rbf_K, X_train_s.shape[0]), replace=False)
+        rbf_centers = X_train_s[idx_c]
+        if rbf_centers.shape[0] >= 2:
+            sample = rbf_centers[rng.choice(rbf_centers.shape[0], size=min(200, rbf_centers.shape[0]), replace=False)]
+            d2 = np.sum((sample[:, None, :] - sample[None, :, :]) ** 2, axis=2)
+            med = np.median(d2[d2 > 0]) if np.any(d2 > 0) else 1.0
+        else:
+            med = 1.0
+        rbf_gamma = 1.0 / (2.0 * med)
+
+        # best sigmoid centers
+        qs = np.linspace(0.1, 0.9, best_sig_M)
+        D = X_train_s.shape[1]
+        sig_centers = np.zeros((D, best_sig_M), dtype=float)
+        for d in range(D):
+            sig_centers[d] = np.quantile(X_train_s[:, d], qs)
+
+        basis_configs = {
+            'Linear only':                  {'poly_degree': None,             'rbf': None,                                        'sigmoid': None,                                  'spline': None},
+            f'Poly(d={best_poly_degree})':  {'poly_degree': best_poly_degree, 'rbf': None,                                        'sigmoid': None,                                  'spline': None},
+            f'RBF(K={best_rbf_K})':         {'poly_degree': None,             'rbf': {'centers': rbf_centers, 'gamma': rbf_gamma}, 'sigmoid': None,                                  'spline': None},
+            f'Sigmoid(M={best_sig_M})':     {'poly_degree': None,             'rbf': None,                                        'sigmoid': {'centers': sig_centers, 'slope': 2.0}, 'spline': None},
+            f'Spline(knots={best_spline_knots})': {'poly_degree': None,       'rbf': None,                                        'sigmoid': None,                                  'spline': {'n_knots': best_spline_knots, 'degree': 3}},
+            f'Poly+RBF':                    {'poly_degree': best_poly_degree, 'rbf': {'centers': rbf_centers, 'gamma': rbf_gamma}, 'sigmoid': None,                                  'spline': None},
+            f'Poly+Sigmoid':                {'poly_degree': best_poly_degree, 'rbf': None,                                        'sigmoid': {'centers': sig_centers, 'slope': 2.0}, 'spline': None},
+            f'RBF+Sigmoid':                 {'poly_degree': None,             'rbf': {'centers': rbf_centers, 'gamma': rbf_gamma}, 'sigmoid': {'centers': sig_centers, 'slope': 2.0}, 'spline': None},
+            f'Poly+Spline':                 {'poly_degree': best_poly_degree, 'rbf': None,                                        'sigmoid': None,                                  'spline': {'n_knots': best_spline_knots, 'degree': 3}},
+            f'RBF+Spline':                  {'poly_degree': None,             'rbf': {'centers': rbf_centers, 'gamma': rbf_gamma}, 'sigmoid': None,                                  'spline': {'n_knots': best_spline_knots, 'degree': 3}},
+            f'Poly+RBF+Spline':             {'poly_degree': best_poly_degree, 'rbf': {'centers': rbf_centers, 'gamma': rbf_gamma}, 'sigmoid': None,                                  'spline': {'n_knots': best_spline_knots, 'degree': 3}},
+            f'Poly+RBF+Sigmoid':            {'poly_degree': best_poly_degree, 'rbf': {'centers': rbf_centers, 'gamma': rbf_gamma}, 'sigmoid': {'centers': sig_centers, 'slope': 2.0}, 'spline': None},
+        }
+
+        basis_ablation_results = []
+        for name, cfg in basis_configs.items():
+            Phi_tr = BasisExpansion.make_design_matrix(X_train_s, basis=cfg, add_linear=True)
+            Phi_va = BasisExpansion.make_design_matrix(X_val_s,   basis=cfg, add_linear=True)
+            Phi_te = BasisExpansion.make_design_matrix(X_test_s,  basis=cfg, add_linear=True)
+            w = LinearRegression.fit_ridge(Phi_tr, y_train, lam=lam)
+            basis_ablation_results.append({
+                'model':    name,
+                'val_mse':  LinearRegression.mse(y_val,  Phi_va @ w),
+                'test_mse': LinearRegression.mse(y_test, Phi_te @ w),
+                'P':        Phi_tr.shape[1],
+            })
+
+        basis_ablation_results = sorted(basis_ablation_results, key=lambda r: r['val_mse'])
+        
+        elapsed_time = time.time() - t0
+        mem_mb = tracemalloc.get_traced_memory()[1] / 1024**2
+        tracemalloc.stop()
+
+        print('\nBasis ablation (sorted by val MSE):')
+        for r in basis_ablation_results:
+            print(f"- {r['model']:<18} | P={r['P']:<6} | val MSE={r['val_mse']:.4f} | test MSE={r['test_mse']:.4f}")
+
+        return basis_ablation_results, basis_configs, elapsed_time, mem_mb
+
 
 # =============================================================================
 # FEATURE SELECTOR MODULE
@@ -656,6 +942,143 @@ class FeatureSelector:
             for b in range(a + 1, k):
                 inter.append((X_s[:, cols[a]] * X_s[:, cols[b]])[:, None])
         return np.hstack(inter)
+
+    @staticmethod
+    def run_feature_group_ablation(X_train_s, y_train, X_val_s, y_val, X_test_s, y_test, 
+                                   feature_names, best_cfg, lam=1.0):
+        tracemalloc.start()
+        t0 = time.time()
+        
+        feature_groups = FeatureSelector.select_feature_groups(feature_names)
+
+        # Full model baseline
+        Phi_tr_full = BasisExpansion.make_design_matrix(X_train_s, basis=best_cfg, add_linear=True)
+        Phi_va_full = BasisExpansion.make_design_matrix(X_val_s,   basis=best_cfg, add_linear=True)
+        w_full   = LinearRegression.fit_ridge(Phi_tr_full, y_train, lam=lam)
+        base_val = LinearRegression.mse(y_val, Phi_va_full @ w_full)
+
+        feat_ablation = []
+        for gname, cols in feature_groups.items():
+            keep = np.ones(X_train_s.shape[1], dtype=bool)
+            keep[cols] = False  # drop this group
+
+            Xtr = X_train_s[:, keep]
+            Xva = X_val_s[:, keep]
+            Xte = X_test_s[:, keep]
+
+            cfg = {
+                k: (dict(v) if isinstance(v, dict) else v)
+                for k, v in best_cfg.items()
+            }
+
+            # Recompute RBF centers if used
+            if cfg.get('rbf') is not None:
+                K = cfg['rbf']['centers'].shape[0]
+                rng = np.random.default_rng(0)
+                idx_c = rng.choice(Xtr.shape[0], size=min(K, Xtr.shape[0]), replace=False)
+                centers = Xtr[idx_c]
+                if centers.shape[0] >= 2:
+                    sample = centers[rng.choice(centers.shape[0], size=min(200, centers.shape[0]), replace=False)]
+                    d2 = np.sum((sample[:, None, :] - sample[None, :, :]) ** 2, axis=2)
+                    med = np.median(d2[d2 > 0]) if np.any(d2 > 0) else 1.0
+                else:
+                    med = 1.0
+                gamma = 1.0 / (2.0 * med)
+                cfg['rbf'] = {'centers': centers, 'gamma': gamma}
+
+            # Recompute sigmoid centers if used
+            if cfg.get('sigmoid') is not None:
+                M = cfg['sigmoid']['centers'].shape[1]
+                qs = np.linspace(0.1, 0.9, M)
+                D2 = Xtr.shape[1]
+                centers_pf = np.zeros((D2, M), dtype=float)
+                for d in range(D2):
+                    centers_pf[d] = np.quantile(Xtr[:, d], qs)
+                cfg['sigmoid'] = {'centers': centers_pf, 'slope': float(cfg['sigmoid']['slope'])}
+
+            # Reset spline transformer if used
+            if cfg.get('spline') is not None:
+                cfg['spline'] = {
+                    'n_knots': int(cfg['spline']['n_knots']),
+                    'degree':  int(cfg['spline'].get('degree', 3)),
+                }
+
+            Phi_tr = BasisExpansion.make_design_matrix(Xtr, basis=cfg, add_linear=True)
+            Phi_va = BasisExpansion.make_design_matrix(Xva, basis=cfg, add_linear=True)
+            Phi_te = BasisExpansion.make_design_matrix(Xte, basis=cfg, add_linear=True)
+            w      = LinearRegression.fit_ridge(Phi_tr, y_train, lam=lam)
+
+            val_m  = LinearRegression.mse(y_val,  Phi_va @ w)
+            test_m = LinearRegression.mse(y_test, Phi_te @ w)
+            feat_ablation.append({
+                'dropped_group': gname,
+                'delta_val_mse': val_m - base_val,
+                'val_mse':       val_m,
+                'test_mse':      test_m,
+            })
+
+        feat_ablation = sorted(feat_ablation, key=lambda r: r['delta_val_mse'], reverse=True)
+        
+        elapsed_time = time.time() - t0
+        mem_mb = tracemalloc.get_traced_memory()[1] / 1024**2
+        tracemalloc.stop()
+
+        print('\nFeature-group ablation (bigger +delta means group is more important):')
+        for r in feat_ablation:
+            print(f"- drop {r['dropped_group']:<16} | Δval MSE={r['delta_val_mse']:+.4f} | val={r['val_mse']:.4f} | test={r['test_mse']:.4f}")
+
+        return feat_ablation, elapsed_time, mem_mb
+
+    @staticmethod
+    def run_interaction_analysis(X_train_s, y_train, X_val_s, y_val, X_test_s, y_test, 
+                                 feature_names, best_cfg, k=10, lam=1.0):
+        tracemalloc.start()
+        t0 = time.time()
+        
+        # compute correlation on train (scaled X)
+        yc = y_train - y_train.mean()
+        Xc = X_train_s - X_train_s.mean(axis=0)
+        stdy = yc.std() if yc.std() > 0 else 1.0
+        stdx = Xc.std(axis=0)
+        stdx = np.where(stdx == 0, 1.0, stdx)
+        corr = (Xc.T @ yc) / (len(y_train) * stdx * stdy)
+
+        topk = np.argsort(np.abs(corr))[-k:][::-1].tolist()
+        inter_tr = FeatureSelector.interaction_terms(X_train_s, topk)
+        inter_va = FeatureSelector.interaction_terms(X_val_s,   topk)
+        inter_te = FeatureSelector.interaction_terms(X_test_s,  topk)
+
+        Phi_tr_no  = BasisExpansion.make_design_matrix(X_train_s, basis=best_cfg, interactions=None,     add_linear=True)
+        Phi_va_no  = BasisExpansion.make_design_matrix(X_val_s,   basis=best_cfg, interactions=None,     add_linear=True)
+        Phi_te_no  = BasisExpansion.make_design_matrix(X_test_s,  basis=best_cfg, interactions=None,     add_linear=True)
+
+        Phi_tr_int = BasisExpansion.make_design_matrix(X_train_s, basis=best_cfg, interactions=inter_tr, add_linear=True)
+        Phi_va_int = BasisExpansion.make_design_matrix(X_val_s,   basis=best_cfg, interactions=inter_va, add_linear=True)
+        Phi_te_int = BasisExpansion.make_design_matrix(X_test_s,  basis=best_cfg, interactions=inter_te, add_linear=True)
+
+        w_no  = LinearRegression.fit_ridge(Phi_tr_no,  y_train, lam=lam)
+        w_int = LinearRegression.fit_ridge(Phi_tr_int, y_train, lam=lam)
+
+        val_no   = LinearRegression.mse(y_val,  Phi_va_no  @ w_no)
+        val_int  = LinearRegression.mse(y_val,  Phi_va_int @ w_int)
+        test_no  = LinearRegression.mse(y_test, Phi_te_no  @ w_no)
+        test_int = LinearRegression.mse(y_test, Phi_te_int @ w_int)
+
+        elapsed_time = time.time() - t0
+        mem_mb = tracemalloc.get_traced_memory()[1] / 1024**2
+        tracemalloc.stop()
+
+        print('\nInteraction terms analysis:')
+        print('- Selected top-k features for interactions:')
+        for j in topk:
+            print(f"  * {feature_names[j]} (corr={corr[j]:+.3f})")
+        print(f"- #interaction terms added: {inter_tr.shape[1]}")
+        print(f"- Baseline (no interactions): val MSE={val_no:.4f}, test MSE={test_no:.4f}")
+        print(f"- With interactions (x_i x_j): val MSE={val_int:.4f}, test MSE={test_int:.4f}")
+        print(f"- Improvement (val): {val_no - val_int:+.4f}")
+        print(f"- Improvement (test): {test_no - test_int:+.4f}")
+
+        return topk, corr, val_no, val_int, test_no, test_int, elapsed_time, mem_mb
 
     @staticmethod
     def forward_selection(Phi_train, y_train, Phi_val, y_val, k_features, lam=0.1):
@@ -1274,6 +1697,570 @@ class ModelEvaluator(BaseEvaluator):
     - Computational complexity / timing analysis
     - Model comparison and ranking
     """
+    
+    @staticmethod
+    def run_final_cross_validation(X_train_s, y_train, Phi_train, 
+                                   best_lam_ridge, best_lam_lasso, best_l1, best_l2, 
+                                   basis_configs, k_folds_eval=10):
+        import pandas as pd
+        
+        tracemalloc.start()
+        t0 = time.time()
+        
+        # 1. Config basis functions
+        poly_cfg, rbf_cfg, sig_cfg = None, None, None
+        for k, v in basis_configs.items():
+            if k.startswith('Poly(d='): poly_cfg = v
+            elif k.startswith('RBF(K='): rbf_cfg = v
+            elif k.startswith('Sigmoid(M='): sig_cfg = v
+
+        # 2. Design Matrix
+        Phi_train_poly = BasisExpansion.make_design_matrix(X_train_s, basis=poly_cfg, add_linear=True)
+        Phi_train_rbf  = BasisExpansion.make_design_matrix(X_train_s, basis=rbf_cfg,  add_linear=True)
+        Phi_train_sig  = BasisExpansion.make_design_matrix(X_train_s, basis=sig_cfg,  add_linear=True)
+
+        # 3. Models
+        cv_models = {
+            'OLS':                    (Phi_train, lambda Phi, y: LinearRegression.fit_ols(Phi, y, bias_is_first=True)),
+            'Mini-batch GD (Step)':   (Phi_train, lambda Phi, y: LinearRegression.fit_ols_minibatch_gd(Phi, y, lr_schedule='step_decay',       initial_lr=0.01, drop_rate=0.5, epochs_drop=100, batch_size=128, num_epochs=500, bias_is_first=True)[0]),
+            'Mini-batch GD (Cosine)': (Phi_train, lambda Phi, y: LinearRegression.fit_ols_minibatch_gd(Phi, y, lr_schedule='cosine_annealing', initial_lr=0.01,                                batch_size=128, num_epochs=500, bias_is_first=True)[0]),
+            'Ridge':                  (Phi_train, lambda Phi, y: LinearRegression.fit_ridge(Phi, y, lam=best_lam_ridge, bias_is_first=True)),
+            'Lasso':                  (Phi_train, lambda Phi, y: LinearRegression.fit_lasso_cd(Phi, y, lam=best_lam_lasso, num_iters=1000, bias_is_first=True)),
+            'Elastic Net':            (Phi_train, lambda Phi, y: LinearRegression.fit_elastic_net_cd(Phi, y, lam1=best_l1, lam2=best_l2, num_iters=1000, bias_is_first=True)),
+            'Poly Ridge':             (Phi_train_poly, lambda Phi, y: LinearRegression.fit_ridge(Phi, y, lam=best_lam_ridge, bias_is_first=True)),
+            'RBF Ridge':              (Phi_train_rbf, lambda Phi, y: LinearRegression.fit_ridge(Phi, y, lam=best_lam_ridge, bias_is_first=True)),
+            'Sigmoid Ridge':          (Phi_train_sig, lambda Phi, y: LinearRegression.fit_ridge(Phi, y, lam=best_lam_ridge, bias_is_first=True)),
+        }
+
+        cv_results = {}
+        print(f'Running {k_folds_eval}-Fold Time-Series Cross-Validation ...\n')
+
+        # 4. Run CV
+        for model_name, (Phi_for_model, fit_fn) in cv_models.items():
+            print(f'  Evaluating: {model_name:<25} ...', end='')
+            fold_metrics = ModelEvaluator.kfold_cross_validation_ts(Phi_for_model, y_train, fit_fn=fit_fn, k=k_folds_eval)
+            cv_results[model_name] = fold_metrics
+            print(' Done.')
+        
+        elapsed_time = time.time() - t0
+        mem_mb = tracemalloc.get_traced_memory()[1] / 1024**2
+        tracemalloc.stop()
+
+        print()
+
+        # 5. Format results
+        data_cv = []
+        for model_name, folds in cv_results.items():
+            mse_vals  = np.array([f['MSE']  for f in folds])
+            rmse_vals = np.array([f['RMSE'] for f in folds])
+            mae_vals  = np.array([f['MAE']  for f in folds])
+            r2_vals   = np.array([f['R2']   for f in folds])
+            data_cv.append({
+                'Model': model_name,
+                'MSE (Mean ± Std)': f"{mse_vals.mean():.2f} ± {mse_vals.std():.2f}",
+                'RMSE (Mean ± Std)': f"{rmse_vals.mean():.2f} ± {rmse_vals.std():.2f}",
+                'MAE (Mean ± Std)': f"{mae_vals.mean():.2f} ± {mae_vals.std():.2f}",
+                'R² (Mean ± Std)': f"{r2_vals.mean():.4f} ± {r2_vals.std():.4f}"
+            })
+
+        df_cv = pd.DataFrame(data_cv)
+        df_cv.set_index('Model', inplace=True)
+        return df_cv, cv_results, elapsed_time, mem_mb
+
+    @staticmethod
+    def run_statistical_tests(cv_results: dict):
+        import pandas as pd
+        import warnings
+        import numpy as np
+        
+        cv_mse_scores = {}
+        for name, folds in cv_results.items():
+            cv_mse_scores[name] = [f['MSE'] for f in folds]
+
+        model_names = list(cv_mse_scores.keys())
+        rows = []
+        for i in range(len(model_names)):
+            for j in range(i + 1, len(model_names)):
+                name_a, name_b = model_names[i], model_names[j]
+                scores_a = cv_mse_scores[name_a]
+                scores_b = cv_mse_scores[name_b]
+
+                # Paired t-test
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=RuntimeWarning)
+                    res_t = ModelEvaluator.statistical_test_models(scores_a, scores_b, metric_name='MSE', test_type='ttest')
+
+                rows.append({
+                    'Model A':                  name_a,
+                    'Model B':                  name_b,
+                    'Test Type':                'Paired t-test',
+                    'p-value':                  round(res_t['p_value'], 6) if res_t['p_value'] is not None else float('nan'),
+                    'Statistically Significant?': 'Yes' if res_t['significant'] else 'No',
+                })
+
+                # Wilcoxon signed-rank test
+                try:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", category=RuntimeWarning)
+                        res_w = ModelEvaluator.statistical_test_models(scores_a, scores_b, metric_name='MSE', test_type='wilcoxon')
+
+                    rows.append({
+                        'Model A':                  '',
+                        'Model B':                  '',
+                        'Test Type':                'Wilcoxon signed-rank test',
+                        'p-value':                  round(res_w['p_value'], 6) if res_w['p_value'] is not None else float('nan'),
+                        'Statistically Significant?': 'Yes' if res_w['significant'] else 'No',
+                    })
+                except Exception:
+                    rows.append({
+                        'Model A':                  '',
+                        'Model B':                  '',
+                        'Test Type':                'Wilcoxon signed-rank test',
+                        'p-value':                  float('nan'),
+                        'Statistically Significant?': 'Not applicable',
+                    })
+
+        df_stats = pd.DataFrame(
+            rows,
+            columns=['Model A', 'Model B', 'Test Type', 'p-value', 'Statistically Significant?']
+        )
+
+        print('Statistical Significance Test  |  Metric: MSE  |  α = 0.05\n')
+
+        styled_df = (
+            df_stats.style
+            .format({'p-value': lambda v: f'{v:.6f}' if pd.notna(v) else 'N/A'})
+            .set_properties(**{
+                'font-size': '12px',
+                'text-align': 'left',
+                'padding': '5px 12px'
+            })
+            .set_table_styles([
+                {'selector': 'thead th',
+                 'props': [('font-size', '13px'),
+                           ('text-align', 'center'),
+                           ('padding', '8px')]},
+            ])
+            .hide(axis='index')
+        )
+        return styled_df
+
+    @staticmethod
+    def run_residual_analysis_report(Phi_train, y_train, Phi_test, y_test):
+        import numpy as np
+        from models import LinearRegression
+        
+        print("RESIDUAL STATISTICS AND AUTOCORRELATION ANALYSIS")
+        print("\nModel: OLS (Normal Equations)")
+
+        print("\nTraining OLS model...")
+        w_ols_analysis = LinearRegression.fit_ols(Phi_train, y_train, bias_is_first=True)
+        print(f"Model trained. Weight vector shape: {w_ols_analysis.shape}")
+
+        # Compute residuals on train and test sets
+        y_train_pred = LinearRegression.predict(Phi_train, w_ols_analysis)
+        y_test_pred  = LinearRegression.predict(Phi_test,  w_ols_analysis)
+
+        residuals_train = LinearRegression.compute_residuals(y_train, y_train_pred)
+        residuals_test  = LinearRegression.compute_residuals(y_test,  y_test_pred)
+
+        # Compute statistics for train set
+        print("\n[1] TRAIN SET RESIDUALS:")
+        stats_train = ModelEvaluator.compute_residual_statistics(residuals_train)
+        print(f"  Mean              : {stats_train['mean']:>12.6f}")
+        print(f"  Std Deviation     : {stats_train['std']:>12.4f}")
+        print(f"  Skewness          : {stats_train['skewness']:>12.4f}")
+        print(f"  Kurtosis          : {stats_train['kurtosis']:>12.4f}")
+
+        residuals_train_flat = residuals_train.ravel()
+        print(f"  Min               : {np.min(residuals_train_flat):>12.4f}")
+        print(f"  Max               : {np.max(residuals_train_flat):>12.4f}")
+
+        dw_train = ModelEvaluator.durbin_watson_test(residuals_train)
+        print(f"\n  Durbin-Watson     : {dw_train:>12.4f}")
+
+        if dw_train < 1.5:
+            print("  Interpretation    : Strong positive autocorrelation detected")
+            print("                      -> Residuals at time t are similar to residuals at t-1")
+            print("                      -> Model may be missing temporal patterns")
+        elif dw_train > 2.5:
+            print("  Interpretation    : Negative autocorrelation detected")
+            print("                      -> Residuals alternate in sign")
+        else:
+            print("  Interpretation    : No significant autocorrelation")
+            print("                      -> Residuals are independent (good!)")
+
+        # Compute statistics for test set
+        print("\n[2] TEST SET RESIDUALS:")
+        stats_test = ModelEvaluator.compute_residual_statistics(residuals_test)
+        print(f"  Mean              : {stats_test['mean']:>12.6f}")
+        print(f"  Std Deviation     : {stats_test['std']:>12.4f}")
+        print(f"  Skewness          : {stats_test['skewness']:>12.4f}")
+        print(f"  Kurtosis          : {stats_test['kurtosis']:>12.4f}")
+
+        residuals_test_flat = residuals_test.ravel()
+        print(f"  Min               : {np.min(residuals_test_flat):>12.4f}")
+        print(f"  Max               : {np.max(residuals_test_flat):>12.4f}")
+
+        dw_test = ModelEvaluator.durbin_watson_test(residuals_test)
+        print(f"\n  Durbin-Watson     : {dw_test:>12.4f}")
+
+        if dw_test < 1.5:
+            print("  Interpretation    : Strong positive autocorrelation detected")
+        elif dw_test > 2.5:
+            print("  Interpretation    : Negative autocorrelation detected")
+        else:
+            print("  Interpretation    : No significant autocorrelation")
+
+        print("\nAnalysis complete.")
+        
+        return residuals_train, residuals_test, w_ols_analysis
+
+    @staticmethod
+    def run_error_pattern_analysis(y_test, y_test_pred):
+        import pandas as pd
+        import numpy as np
+
+        print("ERROR PATTERN ANALYSIS BY TARGET VALUE RANGE")
+        print(f"Model: OLS (Normal Equations)")
+
+        print("\n[1] Error Analysis by Target Value Range (Test Set):")
+        result_dict = ModelEvaluator.analyze_prediction_errors_by_range(
+            y_test, y_test_pred, n_quantiles=5
+        )
+
+        range_analysis = result_dict['quantile_analysis']
+
+        df_range = pd.DataFrame([{
+            'Quantile':   r['quantile'],
+            'Range':      r['range'],
+            'N Samples':  r['n_samples'],
+            'MAE':        round(r['mae'],  4),
+            'RMSE':       round(r['rmse'], 4),
+            'Mean True':  round(r['mean_true'], 2),
+        } for r in range_analysis])
+
+        styled_df_range = (
+            df_range.style
+            .format({'MAE': '{:.4f}', 'RMSE': '{:.4f}', 'Mean True': '{:.2f}'})
+            .background_gradient(subset=['MAE', 'RMSE'], cmap='YlOrRd')
+            .set_caption('Error Analysis by Target Value Range — OLS (Test Set)')
+            .set_table_styles([
+                {'selector': 'caption',
+                 'props': [('font-size', '14px'), ('font-weight', 'bold'), ('padding', '8px')]},
+                {'selector': 'thead th',
+                 'props': [('font-size', '13px'), ('text-align', 'center'), ('padding', '8px')]},
+                {'selector': 'td',
+                 'props': [('text-align', 'center'), ('padding', '6px 14px'), ('font-size', '12px')]},
+            ])
+            .hide(axis='index')
+        )
+
+        print("\n[2] Top 10 Worst Predictions (Largest Absolute Errors):")
+        worst_dict = ModelEvaluator.identify_worst_predictions(
+            y_test, y_test_pred, top_k=10
+        )
+
+        worst_preds = worst_dict['worst_predictions']
+
+        df_worst = pd.DataFrame([{
+            'Rank':         i + 1,
+            'Actual':       round(p['true_value'],      2),
+            'Predicted':    round(p['predicted_value'], 2),
+            'Error':        round(p['error'],           2),
+            'Abs Error':    round(p['abs_error'],       2),
+            'Rel Error (%)': round(p['relative_error'] * 100, 2),
+        } for i, p in enumerate(worst_preds)])
+
+        styled_df_worst = (
+            df_worst.style
+            .format({
+                'Actual':        '{:.2f}',
+                'Predicted':     '{:.2f}',
+                'Error':         '{:.2f}',
+                'Abs Error':     '{:.2f}',
+                'Rel Error (%)': '{:.2f}',
+            })
+            .background_gradient(subset=['Abs Error'], cmap='Reds')
+            .set_caption('Top 10 Worst Predictions — OLS (Test Set)')
+            .set_table_styles([
+                {'selector': 'caption',
+                 'props': [('font-size', '14px'), ('font-weight', 'bold'), ('padding', '8px')]},
+                {'selector': 'thead th',
+                 'props': [('font-size', '13px'), ('text-align', 'center'), ('padding', '8px')]},
+                {'selector': 'td',
+                 'props': [('text-align', 'center'), ('padding', '6px 14px'), ('font-size', '12px')]},
+            ])
+            .hide(axis='index')
+        )
+
+        worst_errors     = [p['error']     for p in worst_preds]
+        worst_abs_errors = [p['abs_error'] for p in worst_preds]
+        underpredict     = sum(1 for e in worst_errors if e > 0)
+        overpredict      = sum(1 for e in worst_errors if e < 0)
+
+        df_summary = pd.DataFrame([
+            {'Metric': 'Mean Absolute Error (top 10)', 'Value': f"{np.mean(worst_abs_errors):.2f}"},
+            {'Metric': 'Mean Error (top 10)',           'Value': f"{np.mean(worst_errors):.2f}"},
+            {'Metric': 'Std Error (top 10)',            'Value': f"{np.std(worst_errors):.2f}"},
+            {'Metric': 'Underpredictions',              'Value': f"{underpredict}/10 ({underpredict*10}%)"},
+            {'Metric': 'Overpredictions',               'Value': f"{overpredict}/10  ({overpredict*10}%)"},
+        ])
+
+        styled_df_summary = (
+            df_summary.style
+            .set_caption('Worst Predictions Summary')
+            .set_table_styles([
+                {'selector': 'caption',
+                 'props': [('font-size', '14px'), ('font-weight', 'bold'), ('padding', '8px')]},
+                {'selector': 'thead th',
+                 'props': [('font-size', '13px'), ('text-align', 'center'), ('padding', '8px')]},
+                {'selector': 'td',
+                 'props': [('text-align', 'center'), ('padding', '6px 14px'), ('font-size', '12px')]},
+            ])
+            .hide(axis='index')
+        )
+        
+        return styled_df_range, styled_df_worst, styled_df_summary
+
+    @staticmethod
+    def run_diagnostic_plots_and_summaries(Phi_train, y_train, Phi_val, y_val, Phi_test, y_test, w_ols_analysis):
+        from models import LinearRegression
+        from visualizations import (
+            plot_section12_learning_curves, 
+            plot_section12_residuals, 
+            plot_section12_predicted_vs_actual, 
+            plot_section12_qq_histogram
+        )
+
+        y_train_pred = LinearRegression.predict(Phi_train, w_ols_analysis)
+        y_test_pred  = LinearRegression.predict(Phi_test,  w_ols_analysis)
+
+        residuals_train = LinearRegression.compute_residuals(y_train, y_train_pred)
+        residuals_test  = LinearRegression.compute_residuals(y_test,  y_test_pred)
+
+        print("[1/4] Learning Curves...")
+
+        fit_fn_ols = lambda Phi, y: LinearRegression.fit_ols(Phi, y, bias_is_first=True)
+
+        train_sizes, train_mse_lc, val_mse_lc = ModelEvaluator.compute_learning_curve(
+            Phi_train, y_train,
+            Phi_val, y_val,
+            fit_fn=fit_fn_ols,
+            n_points=15,
+        )
+
+        plot_section12_learning_curves(train_sizes, train_mse_lc, val_mse_lc)
+
+        gap = val_mse_lc[-1] - train_mse_lc[-1]
+        print(f"  Final Train MSE   : {train_mse_lc[-1]:,.2f}")
+        print(f"  Final Val   MSE   : {val_mse_lc[-1]:,.2f}")
+        print(f"  Gap (Val - Train) : {gap:,.2f}")
+        if gap > 0.3 * train_mse_lc[-1]:
+            print("  -> Large gap: possible OVERFITTING or distribution shift between Val and Train.")
+        else:
+            print("  -> Small gap: model likely UNDERFITTING (high bias).")
+
+        print("\n[2/4] Residual Plot (Residuals vs. Predicted)...")
+
+        plot_section12_residuals(
+            y_train_pred, residuals_train,
+            y_test_pred,  residuals_test,
+        )
+
+        print("\n[3/4] Predicted vs. Actual...")
+
+        plot_section12_predicted_vs_actual(
+            y_train, y_train_pred,
+            y_test,  y_test_pred,
+        )
+
+        print("\n[4/4] QQ-Plot & Residual Histogram...")
+
+        stats_train_full = ModelEvaluator.compute_residual_statistics(residuals_train)
+        stats_test_full  = ModelEvaluator.compute_residual_statistics(residuals_test)
+
+        plot_section12_qq_histogram(
+            residuals_train, stats_train_full,
+            residuals_test,  stats_test_full,
+        )
+
+        print("\nNormality Summary:")
+        for label, st in [("Train Set", stats_train_full), ("Test Set ", stats_test_full)]:
+            verdict = "Possibly normal" if st['is_normal'] else "NON-normal"
+            print(f"  {label}: Shapiro-Wilk p = {st['shapiro_pvalue']:.4f}  ->  {verdict}")
+            print(f"           Skewness = {st['skewness']:.3f}  |  Kurtosis = {st['kurtosis']:.3f}")
+
+    @staticmethod
+    def run_cv_summary_and_plot(cv_results):
+        from models import BaseEvaluator
+        from visualizations import plot_section12_model_comparison
+        import pandas as pd
+
+        summary_cv = BaseEvaluator.compute_model_summary_from_cv(cv_results)
+        plot_section12_model_comparison(summary_cv)
+
+        rows = []
+        for name, s in sorted(summary_cv.items(), key=lambda x: x[1]['mean_rmse']):
+            rows.append({
+                'Model':          name,
+                'Mean RMSE':      s['mean_rmse'],
+                'Std RMSE':       s['std_rmse'],
+                'Mean MAE':       s['mean_mae'],
+                'Mean R²':        s['mean_r2'],
+            })
+
+        df_summary = pd.DataFrame(rows).set_index('Model')
+
+        styled_df = (
+            df_summary.style
+            .format({
+                'Mean RMSE': '{:.4f}',
+                'Std RMSE':  '{:.4f}',
+                'Mean MAE':  '{:.4f}',
+                'Mean R²':   '{:.4f}',
+            })
+            .highlight_min(subset=['Mean RMSE'], color='#d4edda')
+            .highlight_max(subset=['Mean R²'],   color='#d4edda')
+            .set_caption('Cross-Validation Summary — All Models (sorted by Mean RMSE)')
+            .set_table_styles([
+                {'selector': 'caption',
+                 'props': [('font-size', '14px'), ('font-weight', 'bold'), ('padding', '8px')]},
+                {'selector': 'thead th',
+                 'props': [('font-size', '13px'), ('text-align', 'center'), ('padding', '8px')]},
+                {'selector': 'td',
+                 'props': [('text-align', 'center'), ('padding', '6px 14px'), ('font-size', '12px')]},
+            ])
+        )
+        return styled_df
+
+    @staticmethod
+    def run_bias_variance_analysis(Phi_train, y_train, Phi_val, y_val, best_lam_ridge, lam_subset=None, n_bootstrap=50, seed=42):
+        from visualizations import plot_section12_bias_variance
+        import pandas as pd
+        import numpy as np
+
+        if lam_subset is None:
+            lam_subset = np.logspace(3, -3, 15)
+
+        print(f"Computing Bias-Variance decomposition (n_bootstrap={n_bootstrap})...")
+        bias_sq_list, variance_list, mse_bv_list = ModelEvaluator.bias_variance_decomposition(
+            Phi_train, y_train,
+            Phi_val,   y_val,
+            lambdas=lam_subset,
+            n_bootstrap=n_bootstrap,
+            seed=seed,
+        )
+
+        plot_section12_bias_variance(
+            lam_subset, bias_sq_list, variance_list, mse_bv_list,
+            best_lam=best_lam_ridge,
+        )
+
+        df_bv = pd.DataFrame([{
+            'log₁₀(λ)':  round(float(np.log10(lam)), 2),
+            'λ':          round(float(lam), 6),
+            'Bias²':      round(float(b2), 4),
+            'Variance':   round(float(v),  4),
+            'MSE (total)': round(float(m), 4),
+        } for lam, b2, v, m in zip(lam_subset, bias_sq_list, variance_list, mse_bv_list)])
+
+        is_best = df_bv['λ'].apply(lambda x: abs(x - best_lam_ridge) == abs(df_bv['λ'] - best_lam_ridge).min())
+
+        styled_df = (
+            df_bv.style
+            .format({
+                'log₁₀(λ)':    '{:.2f}',
+                'λ':            '{:.6f}',
+                'Bias²':        '{:.4f}',
+                'Variance':     '{:.4f}',
+                'MSE (total)':  '{:.4f}',
+            })
+            .background_gradient(subset=['Bias²'],      cmap='Reds',   low=0, high=1)
+            .background_gradient(subset=['Variance'],    cmap='Blues',  low=0, high=1)
+            .background_gradient(subset=['MSE (total)'], cmap='Greens', low=0, high=1)
+            .apply(lambda x: ['font-weight: bold; background-color: #fffacd' if is_best.iloc[i]
+                               else '' for i in range(len(x))], axis=0)
+            .set_caption(f'Bias–Variance Decomposition vs. λ (Ridge Regression, n_bootstrap={n_bootstrap})')
+            .set_table_styles([
+                {'selector': 'caption',
+                 'props': [('font-size', '14px'), ('font-weight', 'bold'), ('padding', '8px')]},
+                {'selector': 'thead th',
+                 'props': [('font-size', '13px'), ('text-align', 'center'), ('padding', '8px')]},
+                {'selector': 'td',
+                 'props': [('text-align', 'center'), ('padding', '6px 14px'), ('font-size', '12px')]},
+            ])
+            .hide(axis='index')
+        )
+
+        best_idx    = int(np.argmin(mse_bv_list))
+        best_lam_bv = lam_subset[best_idx]
+        print(f"\nBias-Variance optimal λ : {best_lam_bv:.6f}  (log₁₀ = {np.log10(best_lam_bv):.2f})")
+        print(f"CV-selected best_lam_ridge : {best_lam_ridge:.6f}  (log₁₀ = {np.log10(best_lam_ridge):.2f})")
+        print(f"Min MSE (B-V decomposition): {mse_bv_list[best_idx]:.4f}")
+        print(f"  -> Bias²   at min MSE    : {bias_sq_list[best_idx]:.4f}")
+        print(f"  -> Variance at min MSE   : {variance_list[best_idx]:.4f}")
+
+        return styled_df
+
+    @staticmethod
+    def run_timing_comparison(Phi_train, y_train, best_lam_ridge, n_repeats=5):
+        from models import LinearRegression, BaseEvaluator
+        from visualizations import plot_section12_runtime
+        import pandas as pd
+
+        methods = {
+            'Normal Equations (OLS)':     lambda Phi, y: LinearRegression.fit_ols(Phi, y, bias_is_first=True),
+            'Ridge (Closed-form)':        lambda Phi, y: LinearRegression.fit_ridge(Phi, y, lam=best_lam_ridge, bias_is_first=True),
+            'Mini-batch GD (Step Decay)': lambda Phi, y: LinearRegression.fit_ols_minibatch_gd(
+                                              Phi, y, lr_schedule='step_decay',
+                                              num_epochs=50, batch_size=64)[0],
+            'Mini-batch GD (Cosine)':     lambda Phi, y: LinearRegression.fit_ols_minibatch_gd(
+                                              Phi, y, lr_schedule='cosine_annealing',
+                                              num_epochs=50, batch_size=64)[0],
+        }
+
+        print(f"Timing methods ({n_repeats} repeats each)...")
+        timing = BaseEvaluator.time_method_comparison(methods, Phi_train, y_train, n_repeats=n_repeats)
+
+        df_timing = pd.DataFrame([{
+            'Method':          name,
+            'Mean Time (s)':   round(t['mean_s'], 4),
+            'Std (s)':         round(t['std_s'],  4),
+            'Relative Speed':  round(t['mean_s'] / min(v['mean_s'] for v in timing.values()), 2),
+        } for name, t in timing.items()])
+
+        styled_df = (
+            df_timing.style
+            .format({
+                'Mean Time (s)':  '{:.4f}',
+                'Std (s)':        '{:.4f}',
+                'Relative Speed': '{:.2f}x',
+            })
+            .background_gradient(subset=['Mean Time (s)'], cmap='YlOrRd')
+            .highlight_min(subset=['Mean Time (s)'], color='#d4edda')
+            .set_caption(f'Computational Cost Comparison — Training Time ({n_repeats} repeats, Phi_train)')
+            .set_table_styles([
+                {'selector': 'caption',
+                 'props': [('font-size', '14px'), ('font-weight', 'bold'), ('padding', '8px')]},
+                {'selector': 'thead th',
+                 'props': [('font-size', '13px'), ('text-align', 'center'), ('padding', '8px')]},
+                {'selector': 'td',
+                 'props': [('text-align', 'center'), ('padding', '6px 14px'), ('font-size', '12px')]},
+            ])
+            .hide(axis='index')
+        )
+
+        plot_section12_runtime(timing)
+
+        fastest = min(timing, key=lambda k: timing[k]['mean_s'])
+        slowest = max(timing, key=lambda k: timing[k]['mean_s'])
+        ratio   = timing[slowest]['mean_s'] / timing[fastest]['mean_s']
+        print(f"\nFastest : {fastest}  ({timing[fastest]['mean_s']:.4f}s)")
+        print(f"Slowest : {slowest}  ({timing[slowest]['mean_s']:.4f}s)")
+        print(f"Speed ratio (slowest / fastest) : {ratio:.1f}x")
+
+        return styled_df
 
     # ------------------------------------------------------------------
     # 12.1 Learning Curve Analysis
@@ -2085,6 +3072,35 @@ class SensitivityAnalyzer:
     #  1. Experiment runner                                               #
     # ------------------------------------------------------------------ #
     @staticmethod
+    def run_sensitivity_pipeline(train_df, val_df, test_df, target_col, best_lam_ridge, best_lam_lasso):
+        import pandas as pd
+        from models import SensitivityAnalyzer
+
+        _df_full = pd.concat([train_df, val_df, test_df], ignore_index=True)
+        X_all    = _df_full.drop(columns=[target_col]).values.astype(float)
+        y_all    = _df_full[target_col].values.astype(float)
+
+        print(f"Full dataset  : {_df_full.shape[0]} samples, {X_all.shape[1]} features")
+        print(f"Target        : '{target_col}'")
+        print(f"Lambda Ridge  : {best_lam_ridge:.4f}  (from CV Section 5)")
+        print(f"Lambda Lasso  : {best_lam_lasso:.4f}  (from CV Section 5)")
+
+        df_sensitivity = SensitivityAnalyzer.run_experiment(
+            X           = X_all,
+            y           = y_all,
+            test_sizes  = [0.4, 0.3, 0.2],
+            n_repeats   = 20,
+            lam_ridge   = best_lam_ridge,
+            lam_lasso   = best_lam_lasso,
+            lam_en_l1   = best_lam_lasso,
+            lam_en_l2   = best_lam_ridge,
+            lasso_iters = 500,
+            seed_base   = 0,
+        )
+
+        return df_sensitivity
+
+    @staticmethod
     def run_experiment(
         X: np.ndarray,
         y: np.ndarray,
@@ -2735,4 +3751,5 @@ class NoiseInjectionAnalyzer:
   - Recommendation: when deploying in noisy sensor environments,
     prefer regularised models over plain OLS.
 """)
+
 
