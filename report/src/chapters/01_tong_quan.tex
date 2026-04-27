@@ -1,0 +1,148 @@
+\section{Giới thiệu tổng quan}
+
+\subsection{Mục tiêu đồ án}
+
+Đồ án này nhằm mục đích nghiên cứu và triển khai các thuật toán học máy có giám sát trên hai bài toán chính: \textit{Hồi quy (Regression)} và \textit{Phân lớp (Classification)}. Điểm đặc biệt của đồ án là tất cả các thuật toán học máy đều được cài đặt từ đầu dựa trên các công thức toán học cơ bản, không sử dụng các hàm có sẵn từ thư viện học máy, nhằm hiểu sâu về bản chất toán học và cơ chế hoạt động của từng thuật toán.
+
+\subsection{Môi trường và công cụ sử dụng}
+
+\subsubsection{Ngôn ngữ lập trình và IDE}
+\begin{itemize}
+    \item \textbf{Ngôn ngữ:} Python 3.x
+    \item \textbf{Môi trường phát triển:} Jupyter Notebook
+\end{itemize}
+
+\subsubsection{Thư viện và framework}
+
+\textbf{1. Thư viện xử lý dữ liệu và tính toán khoa học:}
+\begin{itemize} [labelsep=10pt, leftmargin=2cm]
+    \item \textbf{NumPy:} Thư viện cốt lõi cho tính toán ma trận và đại số tuyến tính. Được sử dụng để:
+    \begin{itemize}
+        \item Cài đặt các phép toán ma trận cơ bản, chuyển vị và nghịch đảo.
+        \item Tính toán đạo hàm bậc nhất và ma trận đạo hàm bậc hai phục vụ thuật toán tối ưu.
+        \item Xử lý tính toán song song trên mảng nhằm tối đa hóa hiệu năng vòng lặp.
+    \end{itemize}
+    
+    \item \textbf{Pandas:} Công cụ xử lý dữ liệu dạng bảng. Được sử dụng cho:
+    \begin{itemize}
+        \item Đọc, ghi và phân tách cấu trúc dữ liệu thô.
+        \item Lọc, nhóm và tổng hợp dữ liệu trong bước khám phá tiền xử lý.
+    \end{itemize}
+    
+    \item \textbf{SciPy:} Thư viện tính toán khoa học nâng cao. Được sử dụng cho:
+    \begin{itemize}
+        \item Triển khai các kiểm định thống kê đánh giá hiệu năng (t-test cặp, kiểm định Wilcoxon, kiểm định Chi-bình phương).
+        \item Xử lý đại số tuyến tính phức tạp và giải hệ phương trình nghịch đảo thông qua phân hệ đại số.
+        \item Cung cấp hàm phân phối xác suất hậu nghiệm và tính toán khoảng cách không gian cho các mô hình hạt nhân.
+    \end{itemize}
+\end{itemize}
+
+\textbf{2. Thư viện trực quan hóa:}
+\begin{itemize} [labelsep=10pt, leftmargin=2cm]
+    \item \textbf{Matplotlib:} Công cụ vẽ biểu đồ cơ bản và tùy biến lưới đồ thị, được sử dụng cho:
+    \begin{itemize}
+        \item Trực quan hóa quỹ đạo hội tụ của hàm suy hao qua các vòng lặp.
+        \item Vẽ ranh giới quyết định, vùng bất định và đường đồng mức trong không gian đa chiều.
+        \item Trình bày các đường cong đặc trưng hoạt động hệ thống và độ chuẩn xác.
+    \end{itemize}
+    
+    \item \textbf{Seaborn:} Thư viện trực quan hóa thống kê bậc cao:
+    \begin{itemize}
+        \item Vẽ bản đồ nhiệt thể hiện mức độ tương quan đa cộng tuyến giữa các đặc trưng.
+        \item Minh họa sự phân bố dữ liệu thông qua biểu đồ hộp, biểu đồ tần suất và ước lượng mật độ.
+    \end{itemize}
+\end{itemize}
+
+\textbf{3. Scikit-learn (Sử dụng giới hạn cho công cụ phụ trợ):}
+\begin{itemize} [labelsep=10pt, leftmargin=2cm]
+    \item \textbf{Tiền xử lý và phân chia dữ liệu:}
+    \begin{itemize}
+        \item Chuẩn hóa phân phối dữ liệu và biến đổi hàm lượng giác để xử lý dữ liệu lệch.
+        \item Điền khuyết dữ liệu bằng phương pháp nội suy trung bình và láng giềng gần nhất.
+        \item Phân chia tập dữ liệu ngẫu nhiên và thiết lập cấu trúc kiểm chứng chéo phân tầng.
+    \end{itemize}
+    
+    \item \textbf{Đánh giá mô hình:}
+    \begin{itemize}
+        \item Cung cấp các độ đo sai số cho bài toán hồi quy và độ đo hiệu năng cho bài toán phân lớp.
+        \item Thiết lập ma trận nhầm lẫn để phân tích chi tiết kết quả dự đoán.
+    \end{itemize}
+
+    \item \textbf{Công cụ khác:} Phân tích thành phần chính nhằm nén giảm số chiều không gian đặc trưng phục vụ việc vẽ đồ thị ranh giới.
+    
+    \item \textbf{Lưu ý quan trọng:} Thư viện Scikit-learn \textbf{tuyệt đối không} được sử dụng để gọi các thuật toán học máy có sẵn. Toàn bộ các mô hình hồi quy và phân lớp đều được nhóm tự cài đặt thủ công từ các phương trình toán học gốc và đóng gói trong hai tệp mã nguồn riêng biệt.
+\end{itemize}
+
+\subsection{Phân công nhiệm vụ và mức độ đóng góp}
+
+\newlist{tableitemize}{itemize}{1}
+\setlist[tableitemize]{
+    label=\textbullet, 
+    leftmargin=1.2em, 
+    nosep, 
+    before=\vspace{-0.5\baselineskip},
+    after=\vspace{0.2\baselineskip} 
+}
+
+\begin{center}
+    \newcounter{memberrow} 
+    \setcounter{memberrow}{0}
+    \renewcommand{\arraystretch}{1.5} 
+    
+    \begin{tabularx}{\textwidth}{|>{\stepcounter{memberrow}\thememberrow}c|p{3.5cm}|c|X|c|}
+        \hline
+        \rowcolor[HTML]{E8E8E8} 
+        \multicolumn{1}{|c|}{\textbf{STT}} & \centering\textbf{Họ và tên} & \textbf{MSSV} & \centering\textbf{Nhiệm vụ chính} & \textbf{Đóng góp} \\
+        \hline
+        
+        % THÀNH VIÊN 1 - PROJECT LEAD
+        & \textbf{Lê Hà Thanh Chương} & 23120195 & 
+        \begin{tableitemize}
+            \item Quản lý tiến độ chung của toàn dự án.
+            \item \textbf{Cơ bản:} Khám phá lý dữ liệu (EDA); Cài đặt \& báo cáo Logistic Regression (Gradient Descent, IRLS, đa lớp), LDA/QDA.
+            \item \textbf{Nâng cao:} Mô hình Probit, Xấp xỉ Laplace.
+            \item \textbf{Phân tích:} Mối liên kết Hồi quy - Phân lớp, năng lực tổng quát hóa (VC Dimension).
+            \item Kiểm tra chéo tiến độ \& mã nguồn.
+        \end{tableitemize} & 100\% \\ \hline
+        
+        % THÀNH VIÊN 2
+        & \textbf{Trà Văn Sỹ} & 23120197 & 
+        \begin{tableitemize}
+            \item \textbf{Cơ bản:} Khám phá lý dữ liệu (EDA); Cài đặt \& báo cáo Perceptron, Logistic Regression + Regularization (L1/L2, k-fold CV).
+            \item \textbf{Nâng cao:} Kernel Logistic Regression, Gaussian Naive Bayes.
+            \item \textbf{Phân tích:} Tính toán VC Dimension thực nghiệm; Trực quan hóa độ đo K-fold CV (ROC/AUC), Đánh giá so sánh toàn diện.
+            \item Kiểm tra chéo tiến độ \& mã nguồn.
+        \end{tableitemize} & 100\% \\ \hline
+        
+        % THÀNH VIÊN 3
+        & \textbf{Huỳnh Đức Thịnh} & 23120199 & 
+        \begin{tableitemize}
+            \item \textbf{Cơ bản:} Tiền xử lý hồi quy; Cài đặt \& báo cáo Linear Regression (OLS, Mini-batch GD).
+            \item \textbf{Nâng cao:} Hồi quy Bayesian đầy đủ, Evidence Maximization.
+            \item \textbf{Phân tích:} Learning Curves, phân tích phần dư, tính toán độ phức tạp; đánh giá tính nhạy cảm và bền vững.
+            \item Kiểm tra chéo tiến độ \& mã nguồn.
+        \end{tableitemize} & 100\% \\ \hline
+        
+        % THÀNH VIÊN 4
+        & \textbf{Bùi Trung Hiếu} & 23120257 & 
+        \begin{tableitemize}
+            \item \textbf{Cơ bản:} Xử lý Missing values, chuẩn hóa; Cài đặt \& báo cáo Ridge (L2), Lasso (L1), Feature Selection.
+            \item \textbf{Nâng cao:} Kernel Ridge Regression, Gaussian Process.
+            \item \textbf{Phân tích:} Kiểm định thống kê (Paired t-test, Wilcoxon, McNemar), Reliability Diagram.
+            \item Tổng hợp báo cáo (Khả năng tái hiện, kết luận).
+            \item Kiểm tra chéo tiến độ \& mã nguồn.
+        \end{tableitemize} & 100\% \\ \hline
+        
+        % THÀNH VIÊN 5
+        & \textbf{Lê Công Phúc} & 23120330 & 
+        \begin{tableitemize}
+            \item \textbf{Cơ bản:} Cài đặt \& báo cáo mô hình phi tuyến (Polynomial, RBF, Sigmoid), Validation Curve, Ablation Study.
+            \item \textbf{Nâng cao:} Robust Regression.
+            \item \textbf{Phân tích:} Phân tích Bias-Variance Tradeoff, Đánh giá K-fold CV phần hồi quy, phân tích ranh giới quyết định \& phân tích lỗi.
+            \item Kiểm tra chéo tiến độ \& mã nguồn.
+        \end{tableitemize} & 100\% \\ \hline
+        
+    \end{tabularx}
+\end{center}
+
+\clearpage

@@ -1,0 +1,138 @@
+\documentclass[oneside]{styles/hcmus-report}
+\usepackage{packages/codespace}
+
+% Encodings
+\usepackage{gensymb,textcomp}
+
+% Better tables
+% Wide tables go to https://tex.stackexchange.com/q/332902
+
+\usepackage{array,longtable,multicol,multirow,siunitx,tabularx}
+
+% Better enum
+\usepackage{enumitem}
+
+% Graphics
+\usepackage{caption,float}
+
+% Add options for figures, like max width, framing, etc.
+\usepackage[export]{adjustbox}
+
+\usepackage{caption} 
+
+% References
+% Use \Cref{} instead of \ref{}
+\usepackage[nameinlink]{cleveref}
+
+% FOR DEMONSTRATION PURPOSES, REMOVE IN PRODUCTION
+\usepackage{mwe}
+\usepackage{graphicx}  
+\usepackage{float}     
+\usepackage{subcaption}
+
+\usepackage{xurl}
+\usepackage{hyperref}
+
+% Keep compilation running even when some figure files are missing
+\let\oldincludegraphics\includegraphics
+\renewcommand{\includegraphics}[2][]{%
+  \IfFileExists{#2}{%
+    \oldincludegraphics[#1]{#2}%
+  }{%
+    \fbox{\textit{Missing image: \detokenize{#2}}}%
+  }%
+}
+
+\usepackage{ltablex}
+\keepXColumns
+
+\usepackage{xcolor}
+\usepackage{colortbl}
+
+% Configurations
+\coursename{Nhập môn học máy}
+\reporttype{BÁO CÁO ĐỒ ÁN 1}
+\title{Học có giám sát và ứng dụng}
+\advisor{& ThS. Lê Nhựt Nam &}
+\stuname{%
+  & 23120195 & Lê Hà Thanh Chương \\
+  & 23120197 & Trà Văn Sỹ \\
+  & 23120199 & Huỳnh Đức Thịnh \\
+  & 23120257 & Bùi Trung Hiếu \\
+  & 23120330 & Lê Công Phúc \\
+}
+
+% Set depth of numbering for counters
+\AtBeginDocument{\counterwithin{lstlisting}{section}}
+
+% Rename some sections
+%\AtBeginDocument{\renewcommand*{\contentsname}{Contents}}
+%\AtBeginDocument{\renewcommand*{\refname}{References}}
+%\AtBeginDocument{\renewcommand*{\bibname}{References}}
+
+% Custom commands
+%\newcommand*\mean[1]{\bar{#1}}
+
+% Allow page breaks inside align* environment
+%\allowdisplaybreaks{}
+
+% Makes a lot of things blue, avoid at all costs
+%\everymath{\color{blue}}
+
+% Set depth of numbering for counters
+\AtBeginDocument{\counterwithin{lstlisting}{section}}
+
+% Rename some sections
+%\AtBeginDocument{\renewcommand*{\contentsname}{Contents}}
+%\AtBeginDocument{\renewcommand*{\refname}{References}}
+%\AtBeginDocument{\renewcommand*{\bibname}{References}}
+
+% Custom commands
+%\newcommand*\mean[1]{\bar{#1}}
+\AtBeginDocument{\renewcommand{\contentsname}{Mục lục}}
+\AtBeginDocument{\renewcommand{\listfigurename}{Danh sách các hình}}
+\AtBeginDocument{\renewcommand{\listtablename}{Danh sách các bảng}}
+\AtBeginDocument{\renewcommand{\tablename}{Bảng}}
+\AtBeginDocument{\renewcommand{\figurename}{Hình}}
+\AtBeginDocument{\renewcommand{\refname}{Các nguồn tài liệu tham khảo}}
+
+% Reduce layout warnings and satisfy fancyhdr requirements
+\setlength{\headheight}{41pt}
+\setlength{\hfuzz}{100pt}
+\hbadness=10000
+\emergencystretch=2em
+
+\begin{document}
+\coverpage%
+
+% Mục lục
+\tableofcontents
+
+\clearpage
+\phantomsection
+\addcontentsline{toc}{section}{Danh sách các hình}
+\listoffigures
+
+\clearpage
+\phantomsection
+\addcontentsline{toc}{section}{Danh sách các bảng}
+\listoftables
+
+\clearpage
+
+\input{chapters/01_tong_quan}
+\input{chapters/02_hoi_quy}
+\input{chapters/03_phan_lop}
+\input{chapters/04_so_sanh}
+\input{chapters/05_tong_ket}
+
+\clearpage
+
+\phantomsection
+\addcontentsline{toc}{section}{Các nguồn tài liệu tham khảo}
+
+\bibliographystyle{IEEEtran}
+\bibliography{refs/example.bib}
+\nocite{*}
+
+\end{document}
