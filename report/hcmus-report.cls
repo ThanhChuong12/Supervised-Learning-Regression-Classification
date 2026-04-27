@@ -19,9 +19,6 @@
 % Change to '[english,vietnamese]' to use Vietnamese labels
 \RequirePackage[english]{babel}
 
-% ============================================================
-% CUSTOM: Thêm packages để tùy chỉnh format heading theo style Chương
-% ============================================================
 \RequirePackage{tikz}
 \RequirePackage{titlesec}
 
@@ -141,8 +138,6 @@
 
 \pagestyle{fancy}
 \fancyhf{}
-
-%\renewcommand{\subsectionmark}[1]{\markright{\thesubsection.\ #1}}
 
 % The drawing units are interpreted as multiples of \unitlength
 % unless a unit is given

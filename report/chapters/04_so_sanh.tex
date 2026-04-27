@@ -154,13 +154,15 @@ Thứ hai, sự chuyển dịch giữa nghiệm giải tích và tối ưu lặp
 \subsection{Phân tích mức độ nhạy cảm và tính bền vững}
 \subsubsection{Đánh giá qua thay đổi tỷ lệ Train/Test}
 
+\vspace{0.5em}
+\noindent\textcolor{lightblue}{\textbf{Phần 1: Hồi quy}}
+\vspace{0.5em}
+
 Phân tích độ nhạy cảm đánh giá mức độ hiệu năng mô hình thay đổi khi lượng dữ liệu huấn luyện thay đổi.
-Thay vì chạy một lần duy nhất, thí nghiệm lặp lại nhiều lần với hạt giống ngẫu nhiên khác nhau
+Thay vì chạy một lần duy nhất, thí nghiệm lặp lại nhiều lần ngẫu nhiên khác nhau
 để ước lượng phân phối thống kê của hiệu năng, từ đó phân biệt mô hình ổn định với mô hình nhạy cảm.
 
-\vspace{0.5em}
-\noindent\textcolor{lightblue}{\textbf{1. Thiết lập thí nghiệm}}
-\vspace{0.5em}
+\textbf{1. Thiết lập thí nghiệm}
 
 \begin{itemize}
     \item \textbf{Tập dữ liệu:} 19.735 mẫu, 39 đặc trưng, biến mục tiêu là lượng tiêu thụ điện năng của thiết bị gia dụng (\textit{Appliances}).
@@ -171,12 +173,11 @@ Thay vì chạy một lần duy nhất, thí nghiệm lặp lại nhiều lần 
     \item \textbf{Chỉ số đánh giá:} Trung vị $R^2$ và độ lệch chuẩn $\sigma(R^2)$ qua 20 lần chạy.
 \end{itemize}
 
-\vspace{0.5em}
-\noindent\textcolor{lightblue}{\textbf{2. Kết quả theo từng tỷ lệ phân chia}}
-\vspace{0.5em}
+\textbf{2. Kết quả theo từng tỷ lệ phân chia}
 
 Bảng~\ref{tab:sensitivity} trình bày trung vị $R^2$ và $\sigma(R^2)$ của mỗi mô hình qua 20 lần chạy
 ở ba tỷ lệ phân chia.
+Hình~\ref{fig:sensitivity_reg} là boxplot trực quan hóa phân phối kết quả.
 
 \begin{table}[h]
 \centering
@@ -199,8 +200,17 @@ WLS         & $-0.0054^\dagger$ & $\approx1.77\times10^{27}$ & $0.1834$ & $\appr
 \end{tabular}}
 \end{table}
 
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{graphics/sensitivity_reg_boxplot.png}
+    \caption{Boxplot phân phối $R^2$ qua 20 lần chạy tại ba tỷ lệ phân chia (Regression).
+    Ridge và Elastic Net có hộp hẹp nhất (ổn định nhất, avg $\sigma < 0.007$);
+    OLS và WLS bị cắt ở $[-1.5, 0.5]$ để đảm bảo khả năng đọc đồ thị do phương sai bùng nổ.}
+    \label{fig:sensitivity_reg}
+\end{figure}
+
 \textbf{Nhóm mô hình ổn định (Ridge, Lasso, Elastic Net):}
-Ba mô hình có điều chuẩn hóa duy trì $R^2$ ổn định trong khoảng $0.19$--$0.20$
+Ba mô hình có điều chuẩn hóa duy trì $R^2$ ổn định trong khoảng $0.19$ -- $0.20$
 trên mọi tỷ lệ phân chia, với $\sigma(R^2) < 0.012$ qua 20 lần chạy.
 Lasso đạt $R^2$ trung vị cao nhất ở điều kiện khó nhất ($60\%$ train, $R^2 = 0.2019$).
 Ridge và Elastic Net cho kết quả tương đương.
@@ -212,9 +222,7 @@ ma trận $\boldsymbol{\Phi}^\top\boldsymbol{\Phi}$ trở nên gần suy biến 
 khiến nghiệm Normal Equations bùng nổ.
 WLS biểu hiện tương tự với $\Delta R^2 = +0.15$ và phương sai bùng nổ theo bậc $10^{27}$.
 
-\vspace{0.5em}
-\noindent\textcolor{lightblue}{\textbf{3. Xếp hạng độ ổn định}}
-\vspace{0.5em}
+\textbf{3. Xếp hạng độ ổn định}
 
 Bảng~\ref{tab:sensitivity_stability} xếp hạng các mô hình theo trung bình $\sigma(R^2)$ qua ba tỷ lệ phân chia.
 Chỉ số này đo trực tiếp mức độ nhạy cảm với sự biến động của phân chia dữ liệu.
@@ -245,7 +253,7 @@ Giá trị nhỏ hơn biểu thị mô hình ổn định hơn.}
     \item \textbf{WLS (5):} avg $\sigma(R^2) \approx 5.90\times10^{25}$ --- nhạy cảm nhất. Trọng số không đồng đều học từ phần dư gây khuếch đại mạnh sự biến động.
 \end{itemize}
 
-\begin{importantbox}{Kết luận: Sensitivity Analysis}
+\begin{importantbox}{Kết luận: Sensitivity Analysis -- Hồi quy}
 Các mô hình có điều chuẩn hóa (Ridge, Lasso, Elastic Net) vượt trội về cả hiệu năng lẫn
 độ ổn định so với OLS và WLS ở mọi tỷ lệ phân chia.
 Điều chuẩn hóa đánh đổi một phần bias để đổi lấy sự giảm đáng kể trong variance,
@@ -253,16 +261,80 @@ cải thiện khả năng khái quát hóa trong điều kiện dữ liệu hạ
 OLS và WLS không phù hợp khi tập huấn luyện bị hạn chế, do rủi ro gần suy biến ma trận $\boldsymbol{\Phi}^\top\boldsymbol{\Phi}$.
 \end{importantbox}
 
+% ---------------------------------------------------------
+\vspace{0.5em}
+\noindent\textcolor{lightblue}{\textbf{Phần 2: Phân lớp (Classification).}}
+\vspace{0.5em}
+
+Thí nghiệm được thiết kế song song, áp dụng cho bộ dữ liệu Room Occupancy
+($N = 8{.}103$ mẫu, $D = 16$ đặc trưng cảm biến).
+Năm mô hình so sánh: OvR, OvO (Newton-Raphson), Softmax (GD, $\eta{=}0.1$, 500 epochs), LDA, QDA.
+Ba tỷ lệ $\text{test\_size} \in \{0.4,\, 0.3,\, 0.2\}$, mỗi tỷ lệ lặp 20 lần với phân tầng
+(\texttt{stratify=y}), tổng 300 lần huấn luyện.
+Chỉ số đánh giá: median Accuracy, F1-macro và $\sigma(\text{Accuracy})$.
+
+Bảng~\ref{tab:sensitivity_cls} trình bày kết quả qua 20 lần chạy tại ba tỷ lệ phân chia.
+Hình~\ref{fig:sensitivity_cls} là boxplot trực quan hóa phân phối Accuracy.
+
+\begin{table}[h]
+\centering
+\caption{Trung vị Accuracy và $\sigma(\text{Accuracy})$ qua 20 lần chạy tại ba tỷ lệ
+phân chia (Classification). Số liệu từ 300 lần huấn luyện.}
+\label{tab:sensitivity_cls}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccccc}
+\toprule
+& \multicolumn{2}{c}{\textbf{60\% Train}} & \multicolumn{2}{c}{\textbf{70\% Train}} & \multicolumn{2}{c}{\textbf{80\% Train}} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+\textbf{Mô hình} & median Acc & $\sigma(\text{Acc})$ & median Acc & $\sigma(\text{Acc})$ & median Acc & $\sigma(\text{Acc})$ \\
+\midrule
+LDA     & $0.9889$ & $0.0013$ & $0.9889$ & $0.0018$ & $0.9889$ & $0.0021$ \\
+OvO     & $0.9957$ & $0.0011$ & $0.9963$ & $0.0014$ & $0.9969$ & $0.0011$ \\
+OvR     & $0.9948$ & $0.0014$ & $0.9947$ & $0.0018$ & $0.9938$ & $0.0018$ \\
+QDA     & $0.9932$ & $0.0015$ & $0.9935$ & $0.0015$ & $0.9929$ & $0.0015$ \\
+Softmax & $0.9790$ & $0.0034$ & $0.9796$ & $0.0029$ & $0.9796$ & $0.0024$ \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{graphics/sensitivity_cls_boxplot.png}
+    \caption{Boxplot phân phối Accuracy qua 20 lần chạy tại ba tỷ lệ phân chia (Classification).
+    OvO có hộp hẹp nhất (ổn định nhất, avg $\sigma = 0.00120$);
+    Softmax có hộp rộng nhất (nhạy cảm nhất, avg $\sigma = 0.00289$).}
+    \label{fig:sensitivity_cls}
+\end{figure}
+
+\textbf{Nhóm ổn định (OvO, QDA, OvR):}
+OvO ổn định nhất (avg $\sigma(\text{Acc}) = 0.00120$) với Accuracy trung vị cao nhất tại tỷ lệ
+$60\%$ train ($0.9957$). Newton-Raphson hội tụ bậc hai đảm bảo nghiệm ổn định.
+Tất cả mô hình có $\Delta\text{Acc} < 0.002$ khi thu hẹp từ $80\%$ xuống $60\%$ tập huấn luyện,
+nghĩa là \textbf{tất cả đều robust} theo tiêu chí $\Delta < 0.005$.
+
+\textbf{Nhóm nhạy cảm hơn (Softmax):}
+Softmax có avg $\sigma(\text{Acc}) = 0.00289$ --- cao gấp $2.4$ lần OvO ---
+do Gradient Descent với learning rate cố định nhạy hơn với phân phối tập nhỏ.
+Tuy nhiên Accuracy trung vị vẫn đạt $0.979$, đủ để hoạt động tốt trong thực tế.
+
+\begin{importantbox}{Kết luận: Sensitivity Analysis -- Phân lớp}
+\textbf{OvO ổn định nhất} (avg $\sigma = 0.00120$); Softmax nhạy cảm nhất do GD với
+fixed learning rate. Toàn bộ 5 mô hình đều \textit{robust} ($\Delta\text{Acc} < 0.002$)
+khi thu hẹp tập huấn luyện --- khác biệt hoàn toàn với hồi quy (OLS/WLS bùng nổ).
+\end{importantbox}
+
 \subsubsection{Noise Injection}
+
+\vspace{0.5em}
+\noindent\textcolor{lightblue}{\textbf{Phần 1: Hồi quy}}
+\vspace{0.5em}
 
 Thí nghiệm Noise Injection đánh giá tính bền vững của mô hình trước biến động trong dữ liệu đầu vào
 thay vì biến động trong phân chia mẫu.
 Mô hình được huấn luyện trên dữ liệu sạch, sau đó đánh giá trên tập kiểm định đã bị thêm nhiễu
 với cường độ tăng dần, mô phỏng môi trường triển khai thực tế có sai số cảm biến.
 
-\vspace{0.5em}
-\noindent\textcolor{lightblue}{\textbf{1. Thiết lập thí nghiệm}}
-\vspace{0.5em}
+\textbf{1. Thiết lập thí nghiệm}
 
 \begin{itemize}
     \item \textbf{Mô hình nhiễu:} Nhiễu Gaussian $\epsilon \sim \mathcal{N}(0, \sigma^2)$ được thêm vào các đặc trưng của tập kiểm định sau khi chuẩn hóa; $\sigma$ do đó được diễn giải theo đơn vị độ lệch chuẩn của đặc trưng.
@@ -272,11 +344,10 @@ với cường độ tăng dần, mô phỏng môi trường triển khai thực
     \item \textbf{Chỉ số đánh giá:} Mức giảm $\Delta R^2 = R^2_{\sigma=0} - R^2_{\sigma=1.0}$; giá trị nhỏ hơn nghĩa là mô hình bền vững hơn.
 \end{itemize}
 
-\vspace{0.5em}
-\noindent\textcolor{lightblue}{\textbf{2. Kết quả}}
-\vspace{0.5em}
+\textbf{2. Kết quả}
 
 Bảng~\ref{tab:noise_injection} so sánh $R^2$ tại mức cơ sở và mức nhiễu cao nhất.
+Hình~\ref{fig:noise_reg} là đường cong suy giảm theo $\sigma$.
 
 \begin{table}[h]
 \centering
@@ -297,6 +368,16 @@ WLS         & $0.0637$  & $-2.64\times10^{27}$$^\dagger$ & $\approx+2.64\times10
 \end{tabular}}
 \end{table}
 
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{graphics/noise_reg_degradation.png}
+    \caption{Trái: đường cong suy giảm $R^2$ theo mức nhiễu $\sigma$ của tất cả mô hình (OLS/WLS
+    bị cắt ở $-1.5$ do sụp đổ hoàn toàn). Phải: phóng to nhóm mô hình ổn định (Ridge, Lasso,
+    Elastic Net) để so sánh chi tiết mức suy giảm. Elastic Net (đường tím) duy trì $R^2$
+    cao nhất ở $\sigma = 1.0$.}
+    \label{fig:noise_reg}
+\end{figure}
+
 \textbf{Nhóm bền vững (Elastic Net, Ridge):}
 Elastic Net đạt $\Delta R^2 = 0.4207$ và Ridge đạt $\Delta R^2 = 0.4484$, xếp hạng 1 và 2.
 Điều chuẩn L2 giữ $\|\mathbf{w}\|$ nhỏ, từ đó hạn chế cơ chế khuếch đại nhiễu
@@ -313,13 +394,101 @@ và $-2.64\times10^{27}$ (WLS) tại $\sigma=1.0$.
 WLS đặc biệt nhạy cảm do trọng số không đồng đều học từ phần dư OLS
 tạo ra cấu trúc khuếch đại nhiễu không đồng nhất trên từng chiều đặc trưng.
 
-\begin{importantbox}{Kết luận: Noise Injection}
-Elastic Net là mô hình bền vững nhất trước nhiễu Gaussian ($\Delta R^2 = 0.4207$),
+\begin{importantbox}{Kết luận: Noise Injection -- Hồi quy}
+Elastic Net bền vững nhất trước nhiễu Gaussian ($\Delta R^2 = 0.4207$),
 tiếp theo là Ridge với mức suy giảm gần tương đương.
-OLS và WLS không phù hợp để triển khai trong môi trường có nhiễu đầu vào,
-do thiếu cơ chế kiểm soát $\|\mathbf{w}\|$.
-Kết hợp với kết quả Sensitivity Analysis, điều chuẩn hóa L2 (hoặc L1+L2) là điều kiện cần thiết
-để đảm bảo tính bền vững của mô hình hồi quy tuyến tính trong thực tế.
+OLS và WLS không phù hợp trong môi trường có nhiễu đầu vào do thiếu cơ chế kiểm soát $\|\mathbf{w}\|$.
+Điều chuẩn hóa L2 (hoặc L1 + L2) là điều kiện cần để đảm bảo tính bền vững trong thực tế.
+\end{importantbox}
+
+% ---------------------------------------------------------
+\vspace{0.5em}
+\noindent\textcolor{lightblue}{\textbf{Phần 2: Phân lớp (Classification).}}
+\vspace{0.5em}
+
+Mô hình được huấn luyện một lần trên 6.077 mẫu sạch, sau đó đánh giá trên 2.026 mẫu kiểm định
+có nhiễu Gaussian $\epsilon \sim \mathcal{N}(0,\sigma^2)$ với $\sigma \in \{0.0,\, 0.1,\, 0.5,\, 1.0\}$.
+Hạt giống cố định \texttt{seed = 42}. Chỉ số đánh giá: $\Delta\text{Acc} = \text{Acc}_{\sigma=0} - \text{Acc}_{\sigma=1.0}$,
+giá trị nhỏ hơn biểu thị mô hình bền vững hơn.
+
+Bảng~\ref{tab:noise_cls} so sánh Accuracy tại từng mức nhiễu.
+Hình~\ref{fig:noise_cls} là đường cong suy giảm theo $\sigma$.
+
+\begin{table}[h]
+\centering
+\caption{Accuracy tại bốn mức nhiễu Gaussian và mức suy giảm $\Delta\text{Acc}$ (Classification).
+Số liệu thực nghiệm trên 2.026 mẫu kiểm định; \texttt{seed = 42}.}
+\label{tab:noise_cls}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Mô hình} & $\text{Acc}\;(\sigma{=}0)$ & $\text{Acc}\;(\sigma{=}0.1)$ & $\text{Acc}\;(\sigma{=}0.5)$ & $\text{Acc}\;(\sigma{=}1.0)$ & $\Delta\text{Acc}$ (\textbf{Đánh giá}) \\
+\midrule
+LDA     & $0.9931$ & $0.9936$ & $0.8134$ & $0.6387$ & $+0.3544$ \quad Nhạy cảm \\
+OvO     & $0.9975$ & $0.9896$ & $0.9487$ & $0.8184$ & $+0.1792$ \quad Bền vững \\
+OvR     & $0.9936$ & $0.9738$ & $0.6624$ & $0.4738$ & $+0.5197$ \quad Nhạy cảm nhất \\
+QDA     & $0.9946$ & $0.9344$ & $0.7981$ & $0.7552$ & $+0.2394$ \quad Trung bình \\
+Softmax & $0.9763$ & $0.9778$ & $0.9625$ & $0.8904$ & $+0.0859$ \quad Bền vững nhất \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{graphics/noise_cls_degradation.png}
+    \caption{Đường cong suy giảm Accuracy theo mức nhiễu $\sigma$ (Classification).
+    Softmax (đường xanh lá) dốc ít nhất --- bền vững nhất;
+    OvR (đường xanh dương) suy giảm mạnh nhất.
+    Giá trị tại $\sigma = 1.0$ được chú thích trực tiếp trên đồ thị.}
+    \label{fig:noise_cls}
+\end{figure}
+
+\textbf{Softmax bền vững nhất ($\Delta\text{Acc} = 0.0859$):}
+Gradient Descent tạo ra nghiệm $\mathbf{W}$ với norm nhỏ hơn Newton-Raphson tối ưu hoàn toàn;
+$\|\mathbf{W}\|$ nhỏ trực tiếp hạn chế khuếch đại nhiễu $\|\delta\hat{p}\| \lesssim \|\mathbf{W}\|\cdot\|\delta\mathbf{x}\|$.
+Đầu ra Softmax là phân phối xác suất mềm: nhiễu nhỏ dịch chuyển $p_k$ nhưng không nhất thiết
+thay đổi nhãn $\hat{y} = \arg\max_k p_k$.
+Tại $\sigma = 0.5$ và $\sigma = 1.0$, Softmax đạt Accuracy lần lượt $0.9625$ và $0.8904$.
+
+\textbf{OvO bền vững ($\Delta\text{Acc} = 0.1792$):}
+Cơ chế bỏ phiếu đa số giữa $\binom{K}{2}$ bộ phân lớp nhị phân phân tán sai lệch do nhiễu.
+Mỗi bộ phân lớp chỉ học ranh giới giữa hai lớp nên ít bị ảnh hưởng hơn OvR.
+
+\textbf{OvR nhạy cảm nhất ($\Delta\text{Acc} = 0.5197$):}
+Mất cân bằng lớp nghiêm trọng (``lớp $k$'' vs ``tất cả lớp còn lại'') dẫn đến $\|\mathbf{w}_k\|$ lớn.
+Tại $\sigma = 1.0$, Accuracy chỉ còn $0.4738$ --- gần ngưỡng ngẫu nhiên.
+
+\textbf{LDA ($\Delta\text{Acc} = 0.3544$):}
+Ở $\sigma = 0.1$ LDA cải thiện nhẹ (nhiễu nhỏ như regularizer), nhưng sụp đổ tại $\sigma \geq 0.5$
+khi $\|\delta\mathbf{x}\|$ đạt cùng bậc với khoảng cách giữa tâm lớp.
+
+\textbf{Xếp hạng tổng hợp Sensitivity \& Robustness (Classification)}
+
+\begin{table}[h]
+\centering
+\caption{Xếp hạng tổng hợp. Lưu ý thứ tự xếp hạng đảo ngược giữa hai chiều phân tích.}
+\label{tab:cls_rank_summary}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Mô hình} & \textbf{Rank (Sensitivity)} & \textbf{avg $\sigma$(Acc)} & \textbf{Rank (Robustness)} & $\Delta\text{Acc}$ \\
+\midrule
+OvO     & 1 & $0.00120$ & 2 & $+0.1792$ \\
+QDA     & 2 & $0.00150$ & 3 & $+0.2394$ \\
+OvR     & 3 & $0.00167$ & 5 & $+0.5197$ \\
+LDA     & 4 & $0.00173$ & 4 & $+0.3544$ \\
+Softmax & 5 & $0.00289$ & 1 & $+0.0859$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{importantbox}{Kết luận: Noise Injection -- Phân lớp}
+\textbf{Thứ tự đảo ngược so với Sensitivity:} Softmax bền vững nhất ($\Delta\text{Acc} = 0.0859$)
+nhưng ít ổn định nhất trong sensitivity; OvR nhạy cảm nhất ($\Delta\text{Acc} = 0.5197$)
+mặc dù ổn định tốt với split.
+Như vậy, ổn định với biến động dữ liệu và bền vững với nhiễu đầu vào là hai
+thuộc tính độc lập.
+Trong thực tế triển khai có nhiễu cảm biến: ưu tiên Softmax hoặc OvO;
+trong điều kiện dữ liệu hạn chế: OvO là lựa chọn toàn diện tốt nhất.
 \end{importantbox}
 
 \subsubsection{Feature Corruption}

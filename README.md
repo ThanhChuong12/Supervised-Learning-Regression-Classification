@@ -1,10 +1,18 @@
 # Supervised Learning: Regression & Classification
 
+<div align="center">
+
 ![Python](https://img.shields.io/badge/Python-3.9%2B-blue?style=for-the-badge&logo=python&logoColor=white)
-![Jupyter](https://img.shields.io/badge/Jupyter-Notebook-orange?style=for-the-badge&logo=jupyter&logoColor=white)
-![NumPy](https://img.shields.io/badge/NumPy-Scientific%20Computing-013243?style=for-the-badge&logo=numpy&logoColor=white)
-![Scikit-Learn](https://img.shields.io/badge/scikit--learn-Utilities-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=white)
+![Jupyter](https://img.shields.io/badge/Jupyter-F37626.svg?style=for-the-badge&logo=Jupyter&logoColor=white)
+![NumPy](https://img.shields.io/badge/NumPy-013243.svg?style=for-the-badge&logo=NumPy&logoColor=white)
+![Pandas](https://img.shields.io/badge/Pandas-150458.svg?style=for-the-badge&logo=pandas&logoColor=white)
+![SciPy](https://img.shields.io/badge/SciPy-8CAAE6.svg?style=for-the-badge&logo=scipy&logoColor=white)
+![Scikit-Learn](https://img.shields.io/badge/scikit--learn-F7931E.svg?style=for-the-badge&logo=scikit-learn&logoColor=white)
+
+![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)
 ![Status](https://img.shields.io/badge/Status-Completed-success?style=for-the-badge)
+
+</div>
 
 > **Assignment Report — Introduction to Machine Learning (Nhập môn học máy)**
 >
@@ -13,24 +21,27 @@
 ---
 
 ## Table of Contents
-
 - [1. About The Project](#1-about-the-project)
 - [2. Datasets](#2-datasets)
   - [Regression Dataset: Appliances Energy Prediction](#regression-dataset-appliances-energy-prediction)
   - [Classification Dataset: Room Occupancy Estimation](#classification-dataset-room-occupancy-estimation)
 - [3. Part 1 — Regression](#3-part-1--regression)
-  - [Models Implemented](#regression-models-implemented)
-  - [Key Techniques](#regression-key-techniques)
+  - [Regression Models Implemented](#regression-models-implemented)
+  - [Regression Key Techniques](#regression-key-techniques)
 - [4. Part 2 — Classification](#4-part-2--classification)
-  - [Models Implemented](#classification-models-implemented)
-  - [Key Techniques](#classification-key-techniques)
+  - [Classification Models Implemented](#classification-models-implemented)
+  - [Classification Key Techniques](#classification-key-techniques)
 - [5. Repository Structure](#5-repository-structure)
 - [6. Getting Started](#6-getting-started)
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
   - [Usage](#usage)
 - [7. Contributors](#7-contributors)
-- [8. License & Acknowledgments](#8-license--acknowledgments)
+- [8. License \& Acknowledgments](#8-license--acknowledgments)
+  - [Academic Acknowledgments](#academic-acknowledgments)
+  - [Data Attribution](#data-attribution)
+  - [License](#license)
+
 
 ---
 
@@ -101,7 +112,7 @@ The dataset captures multi-modal environmental signals from IoT sensors for **no
 
 ### Regression Models Implemented
 
-All regression models are implemented from scratch in `code/Part1_Regression/utils.py`.
+All regression models are implemented from scratch in `code/Part1_Regression/models.py`.
 
 | Model | Description |
 | :--- | :--- |
@@ -194,22 +205,23 @@ Supervised-Learning-Regression-Classification/
 │
 ├── code/
 │   ├── Part1_Regression/
-│   │   ├── utils.py                        # All regression algorithms & utilities (~1276 lines)
+│   │   ├── models.py                       # All regression algorithms & utilities
+│   │   ├── visualizations.py               # Rich visualization utilities
 │   │   ├── 01_eda_and_preprocessing.ipynb  # EDA, feature engineering & data pipeline
 │   │   ├── 02_modeling.ipynb               # Core model training & evaluation
 │   │   └── 03_advanced_bonus_experiments.ipynb  # Kernel Ridge, GPR, Bayesian LR, Bias-Variance
 │   │
 │   └── Part2_Classification/
-│       ├── models.py                       # All classification algorithms (~1172 lines)
-│       ├── visualizations.py               # Rich visualization utilities (~834 lines)
+│       ├── models.py                       # All classification algorithms
+│       ├── visualizations.py               # Rich visualization utilities
 │       ├── 01_eda_and_preprocessing.ipynb  # EDA, feature analysis & preprocessing pipeline
 │       ├── 02_modeling.ipynb               # Core classifiers: Perceptron, LogReg, LDA, QDA, NB
 │       └── 03_advanced_bonus_experiments.ipynb  # Bayesian LogReg, Kernel LR, noise robustness
 │
 ├── data/
 │   ├── raw/
-│   │   ├── Energy_Use.csv                  # Raw appliance energy data (19,735 records)
-│   │   └── Room_Occupancy.csv              # Raw room occupancy data (10,129 records)
+│   │   ├── Energy_Use.csv                  # Raw appliance energy data
+│   │   └── Room_Occupancy.csv              # Raw room occupancy data
 │   ├── processed/
 │   │   ├── Energy_Use_train.csv            # Regression training split
 │   │   ├── Energy_Use_val.csv              # Regression validation split
@@ -219,14 +231,27 @@ Supervised-Learning-Regression-Classification/
 │   │   └── Room_Occupancy_test.csv         # Classification test split
 │   └── README.md                           # Data catalog & provenance documentation
 │
+├── logs/
+│   ├── logs_classification.json            # Execution logs and results for classification tests
+│   └── logs_regression.json                # Execution logs and results for regression tests
+│
 ├── report/
-│   ├── report.tex                          # LaTeX source (HCMUS report template)
-│   ├── chapters/                           # Chapter files (overview, regression, classification, etc.)
-│   └── refs/                               # BibTeX references
+│   ├── chapters/                           # Chapter files
+│   │   ├── 01_tong_quan.tex                # Chapter 1: Overview
+│   │   ├── 02_hoi_quy.tex                  # Chapter 2: Regression
+│   │   ├── 03_phan_lop.tex                 # Chapter 3: Classification
+│   │   ├── 04_so_sanh.tex                  # Chapter 4: Comparison
+│   │   └── 05_tong_ket.tex                 # Chapter 5: Conclusion
+│   ├── refs/                               
+│   │   └── example.bib                     # BibTeX references
+│   ├── codespace.sty                       # LaTeX styling packages
+│   ├── hcmus-report.cls                    # HCMUS template class file
+│   └── report.tex                          # LaTeX main source
 │
 ├── .gitignore
 ├── LICENSE
-└── README.md
+├── README.md
+└── requirements.txt                        # Project dependencies
 ```
 
 ---
@@ -271,7 +296,7 @@ conda activate ml-env
 
 ```bash
 pip install --upgrade pip
-pip install numpy scipy matplotlib seaborn pandas scikit-learn jupyter
+pip install -r requirements.txt
 ```
 
 **Step 4: Set up the data**
@@ -322,13 +347,13 @@ jupyter notebook
 
 This project was developed by a team of 5 students from the *Faculty of Information Technology, VNU-HCM University of Science*.
 
-| Student | Student ID | Role | Main Responsibilities |
-| :--- | :---: | :--- | :--- |
-| **Lê Hà Thanh Chương** | `23120195` | **Project Lead** | Architecture design, project management, Part 1 regression modeling & documentation |
-| **Trà Văn Sỹ** | `23120197` | **ML Engineer** | Classification model implementation, multiclass strategies (OvR, OvO) |
-| **Huỳnh Đức Thịnh** | `23120199` | **Data Engineer** | Data preprocessing pipelines, EDA, feature engineering |
-| **Bùi Trung Hiếu** | `23120257` | **Researcher** | Advanced experiments: Bayesian methods, Kernel methods, GPR |
-| **Lê Công Phúc** | `23120330` | **Tech Writer** | Visualization module, report writing & result aggregation |
+| Contributor | Student ID | Role | Main Responsibilities (Algorithms & Analysis) | Contribution |
+| :--- | :---: | :--- | :--- | :---: |
+| **Lê Hà Thanh Chương** | `23120195` | **Project Lead** | Project management; Classification EDA; LogReg (GD, IRLS, Multiclass), LDA/QDA; Probit Model, Laplace Approximation; VC Dimension analysis. | 100% |
+| **Trà Văn Sỹ** | `23120197` | **ML Engineer** | Perceptron, Regularized LogReg (L1/L2); Kernel LogReg, Gaussian Naive Bayes; Empirical VC Dimension & K-fold CV metrics visualization (ROC/AUC). | 100% |
+| **Huỳnh Đức Thịnh** | `23120199` | **Data Scientist** | Regression preprocessing & EDA; Linear Reg (OLS, Mini-batch GD); Full Bayesian Reg, Evidence Maximization; Learning curves & sensitivity analysis. | 100% |
+| **Bùi Trung Hiếu** | `23120257` | **ML Researcher** | Imputation & scaling; Ridge, Lasso, Feature Selection; Kernel Ridge Reg, GPR; Statistical tests (t-test, Wilcoxon, McNemar); Report aggregation. | 100% |
+| **Lê Công Phúc** | `23120330` | **ML Analyst** | Non-linear regression, Validation Curves, Ablation Study; Robust Regression; Bias-Variance Tradeoff, K-fold CV evaluation, decision boundaries. | 100% |
 
 ---
 

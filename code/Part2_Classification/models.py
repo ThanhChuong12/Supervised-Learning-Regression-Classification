@@ -1502,7 +1502,7 @@ class ClassificationNoiseAnalyzer:
             sigmas = [0.0, 0.1, 0.5, 1.0]
 
         if verbose:
-            print("  9.2  Noise Injection Analysis - Robustness Test")
+            print("\tNoise Injection Analysis - Robustness Test")
             print(f"  Training set : {X_train.shape[0]} samples (clean, no noise)")
             print(f"  Test set     : {X_test.shape[0]} samples (noise added per level)")
             print(f"  Sigma levels : {sigmas}")
