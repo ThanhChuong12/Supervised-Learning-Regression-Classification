@@ -1,5 +1,5 @@
-\documentclass[oneside]{styles/hcmus-report}
-\usepackage{packages/codespace}
+\documentclass[oneside]{hcmus-report}
+\usepackage{codespace}
 
 % Encodings
 \usepackage{gensymb,textcomp}
@@ -29,20 +29,12 @@
 \usepackage{graphicx}  
 \usepackage{float}     
 \usepackage{subcaption}
-
+\usepackage{fancyhdr}
 \usepackage{xurl}
 \usepackage{hyperref}
-
-% Keep compilation running even when some figure files are missing
-\let\oldincludegraphics\includegraphics
-\renewcommand{\includegraphics}[2][]{%
-  \IfFileExists{#2}{%
-    \oldincludegraphics[#1]{#2}%
-  }{%
-    \fbox{\textit{Missing image: \detokenize{#2}}}%
-  }%
-}
-
+\usepackage{longtable}
+\usepackage{amsmath, amssymb}
+\usepackage{array}
 \usepackage{ltablex}
 \keepXColumns
 
@@ -104,6 +96,7 @@
 
 \begin{document}
 \coverpage%
+\pagenumbering{roman}
 
 % Mục lục
 \tableofcontents
@@ -118,8 +111,253 @@
 \addcontentsline{toc}{section}{Danh sách các bảng}
 \listoftables
 
-\clearpage
 
+\clearpage
+\phantomsection
+\section*{Danh sách các kí hiệu, chữ viết tắt}
+\addcontentsline{toc}{section}{Danh sách các kí hiệu, chữ viết tắt}
+
+\begin{longtable}{p{0.25\textwidth} p{0.65\textwidth}}
+\textbf{Ký hiệu} & \textbf{Ý nghĩa} \\
+\hline
+\endfirsthead
+\textbf{Ký hiệu} & \textbf{Ý nghĩa} \\
+\hline
+\endhead
+
+$\mathcal{D}$ & Tập dữ liệu huấn luyện $\{(x_n, t_n)\}_{n=1}^{N}$ \\
+$x_n \in \mathbb{R}^D$ & Vector đầu vào thứ $n$ \\
+$t_n \in \mathbb{R}$ & Giá trị đầu ra (mục tiêu) thứ $n$ \\
+$N$ & Số lượng mẫu huấn luyện \\
+$D$ & Số chiều không gian đầu vào \\
+$M$ & Số lượng hàm cơ sở (tham số mô hình) \\
+$\epsilon$ & Nhiễu Gaussian, $\epsilon \sim \mathcal{N}(0, \beta^{-1})$ \\
+$\beta$ & Độ chính xác của nhiễu ($\beta = 1/\sigma^2$) \\
+$\phi_j(x)$ & Hàm cơ sở thứ $j$ \\
+$\phi(x)$ & Vector hàm cơ sở $[\phi_0(x), \ldots, \phi_{M-1}(x)]^\top$ \\
+$w$ & Vector trọng số mô hình $[w_0, w_1, \ldots, w_{M-1}]^\top$ \\
+$y(x, w)$ & Hàm dự đoán của mô hình \\
+$\mu_j$ & Tâm của hàm cơ sở thứ $j$ (RBF, Sigmoid) \\
+$s$ & Tham số độ rộng/tỉ lệ của hàm cơ sở \\
+$\xi_k$ & Điểm nút (knot) thứ $k$ của Cubic Spline \\
+$K$ & Số lượng tâm RBF hoặc điểm nút Spline \\
+$\sigma(\cdot)$ & Hàm Sigmoid \\
+$\Phi \in \mathbb{R}^{N \times M}$ & Ma trận thiết kế (design matrix) \\
+$\mathbf{t}$ & Vector mục tiêu $[t_1, t_2, \ldots, t_N]^\top$ \\
+$E(w)$ & Hàm mất mát bình phương (SSE) \\
+$w^*$ & Nghiệm tối ưu của bài toán OLS \\
+$\Phi^\dagger$ & Giả nghịch đảo Moore--Penrose của $\Phi$ \\
+$\eta$ & Tốc độ học (learning rate) \\
+$\gamma$ & Hệ số momentum \\
+$\mathcal{B}$ & Mini-batch, $|\mathcal{B}| = B$ \\
+$B$ & Kích thước mini-batch \\
+$G$ & Tổng bình phương gradient tích lũy (AdaGrad, RMSProp) \\
+$m, v$ & Moment bậc 1 và bậc 2 (Adam) \\
+$\hat{m}, \hat{v}$ & Moment bậc 1 và 2 sau bias correction (Adam) \\
+$\beta_1, \beta_2$ & Hệ số suy giảm moment của Adam \\
+$\lambda$ & Hệ số điều chuẩn (regularization) \\
+$q$ & Bậc chuẩn điều chuẩn ($q=1$: L1, $q=2$: L2) \\
+$\lambda_1, \lambda_2$ & Hệ số L1 và L2 trong Elastic Net \\
+$\alpha$ & Độ chính xác tiên nghiệm (prior precision) \\
+$\mathbf{m}_N$ & Vector trung bình hậu nghiệm \\
+$\mathbf{S}_N$ & Ma trận hiệp phương sai hậu nghiệm \\
+$\sigma_N^2(\mathbf{x}^*)$ & Phương sai dự đoán tại điểm $\mathbf{x}^*$ \\
+$\text{Bias}^2$ & Bình phương độ lệch hệ thống của mô hình \\
+$\text{Variance}$ & Phương sai dự đoán theo tập huấn luyện \\
+$\sigma_\epsilon^2$ & Phương sai nhiễu nội tại (noise floor) \\
+$h(\mathbf{x}^*)$ & Hàm mục tiêu tất định tại điểm kiểm tra \\
+$k(\mathbf{x}, \mathbf{x}')$ & Hàm kernel \\
+$\mathbf{K}$ & Ma trận Gram (kernel matrix), $K_{nm} = k(x_n, x_m)$ \\
+$\boldsymbol{\alpha}$ & Vector hệ số đối ngẫu (KRR) \\
+$\ell$ & Tham số chiều dài đặc trưng của kernel RBF \\
+$\nu$ & Tham số độ trơn của kernel Matérn / bậc tự do Student-$t$ \\
+$\mathbf{k}_*$ & Vector kernel giữa điểm mới và tập huấn luyện (GPR) \\
+$k_{**}$ & Tự tương quan kernel của điểm kiểm tra (GPR) \\
+$\sigma_n^2$ & Phương sai nhiễu quan sát (GPR) \\
+$\gamma$ & Số tham số hiệu dụng (Evidence Maximization) \\
+$\lambda_i$ & Trị riêng thứ $i$ của $\Phi^\top\Phi$ \\
+$r_n$ & Phần dư của mẫu thứ $n$: $r_n = t_n - w^\top\phi(x_n)$ \\
+$\delta$ & Ngưỡng Huber Loss \\
+$L_\delta(r_n)$ & Huber Loss tại phần dư $r_n$ \\
+$v_n$ & Trọng số IRLS của mẫu thứ $n$ \\
+$\mathbf{V}$ & Ma trận trọng số đường chéo trong IRLS \\
+$\varepsilon$ & Ngưỡng hội tụ của thuật toán lặp \\
+$N:D$           & Tỷ lệ số quan sát trên số đặc trưng \\
+$r$             & Hệ số tương quan Pearson \\
+$Q_1, Q_3$      & Tứ phân vị thứ nhất và thứ ba \\
+IQR             & Khoảng tứ phân vị: $IQR = Q_3 - Q_1$ \\
+$Z$             & Z-score: $Z = (X - \mu)/\sigma$ \\
+$T$             & Độ dài chu kỳ trong mã hóa sin/cos \\
+$X_{sin}, X_{cos}$ & Mã hóa chu kỳ: $\sin(2\pi X/T)$, $\cos(2\pi X/T)$ \\
+$\lambda$       & Số mũ tối ưu của phép biến đổi Yeo-Johnson (Power Transformer) \\
+$\mathbf{A}$            & Ma trận Gram: $\mathbf{A} = \boldsymbol{\Phi}^\top\boldsymbol{\Phi}$ \\
+$\mathbf{b}$            & Vector tích chéo: $\mathbf{b} = \boldsymbol{\Phi}^\top\mathbf{y}$ \\
+$\mathbf{W}$            & Ma trận trọng số đường chéo trong WLS: $\mathbf{W} = \mathrm{diag}(\sqrt{w_1},\ldots,\sqrt{w_N})$ \\
+$\rho_j$                & Đại lượng trung gian trong Coordinate Descent của Lasso/Elastic Net \\
+$z_j$                   & Tổng bình phương cột $j$: $z_j = \sum_n \phi_{nj}^2$ \\
+$\mathcal{S}(\rho,\lambda)$ & Toán tử soft-thresholding: $\mathrm{sign}(\rho)\max(|\rho|-\lambda,0)$ \\
+$\boldsymbol{c}_k$      & Tâm thứ $k$ của hàm cơ sở RBF trong không gian đầu vào \\
+$\gamma_{\text{RBF}}$   & Tham số độ rộng RBF (Median Heuristic): $\gamma = 1/\mathrm{median}(\{\|c_i-c_j\|^2\})$ \\
+$p$                     & Bậc đa thức trong hàm cơ sở Polynomial \\
+$s$                     & Độ dốc (slope) của hàm cơ sở Sigmoid \\
+$z_{nk}$                & Giá trị trước kích hoạt Sigmoid: $z_{nk} = s(\mathbf{x}_n - \mu_k)$ \\
+$P$                     & Số tham số của mô hình \\
+$\Delta\mathrm{MSE}_g$  & Mức thay đổi MSE khi loại bỏ nhóm đặc trưng $g$ \\
+$\mathbf{K}_y$          & Ma trận hiệp phương sai quan sát GPR: $\mathbf{K}_y = \mathbf{K} + \sigma_n^2\mathbf{I} + \varepsilon\mathbf{I}$ \\
+$\mathbf{K}_*$          & Ma trận kernel chéo giữa tập huấn luyện và tập kiểm tra (GPR) \\
+$\mathbf{K}_{**}$       & Ma trận kernel trên tập kiểm tra (GPR) \\
+$\boldsymbol{\mu}_*$    & Vector trung bình hậu nghiệm GPR trên tập kiểm tra \\
+$\mathrm{Var}(f_*)$     & Phương sai hậu nghiệm GPR tại điểm kiểm tra \\
+$\sigma_f$              & Độ lớn tín hiệu trong GPR kernel \\
+$\mathcal{L}(\boldsymbol{\theta})$ & Log-marginal-likelihood GPR \\
+$\boldsymbol{\theta}$   & Vector siêu tham số GPR: $[\log\sigma_f, \log\ell, \log\sigma_n]$ \\
+$\mathbf{L}$            & Ma trận Cholesky: $\mathbf{K}_y = \mathbf{L}\mathbf{L}^\top$ \\
+$LM$                    & Thống kê kiểm định Breusch-Pagan: $LM = N \cdot R^2_{\text{aux}}$ \\
+$H_0, H_1$             & Giả thiết không và giả thiết đối trong kiểm định thống kê \\
+$B$                     & Số lần lấy mẫu Bootstrap \\
+$\bar{\hat{y}}_j$       & Trung bình dự đoán Bootstrap tại điểm $j$ \\
+$\widehat{\text{Bias}^2}$ & Ước lượng Bias² qua Bootstrap \\
+$\widehat{\text{Variance}}$ & Ước lượng Variance qua Bootstrap \\
+$\lambda^*$             & Giá trị tham số điều chuẩn tối ưu \\
+$\mathcal{D}_{\mathrm{train}}^{(k)}, \mathcal{D}_{\mathrm{val}}^{(k)}$ 
+    & Tập huấn luyện và kiểm định tại fold thứ $k$ trong Time-Series CV \\
+$s_k$       & Mốc phân chia thứ $k$ trong Expanding Window CV \\
+$\hat{t}_n$ & Giá trị dự đoán của mẫu thứ $n$ \\
+$\bar{t}$   & Giá trị trung bình của biến mục tiêu trên tập dữ liệu \\
+$R^2$       & Hệ số xác định: $R^2 = 1 - \frac{\sum(t_n-\hat{t}_n)^2}{\sum(t_n-\bar{t})^2}$ \\
+$\mu \pm \sigma$ & Ký hiệu báo cáo kết quả: trung bình $\pm$ độ lệch chuẩn trên các fold \\
+
+%  CLASSIFICATION
+$\mathcal{C}_k$         & Lớp phân loại thứ $k$ \\
+$p(\mathcal{C}_k|\mathbf{x})$ & Xác suất hậu nghiệm của lớp $k$ khi biết $\mathbf{x}$ \\
+$p(\mathbf{x}|\mathcal{C}_k)$ & Hàm mật độ xác suất có điều kiện của lớp $k$ \\
+$w_0$                   & Hệ số tự do (bias) của hàm phân quyết \\
+$a, a_k$                & Điểm số thô (logit): $a = \mathbf{w}^\top\phi(\mathbf{x})$ \\
+$\eta$                  & Thông số tự nhiên của phân phối họ mũ \\
+$\pi_k$                 & Xác suất tiên nghiệm của lớp $\mathcal{C}_k$ \\
+$\mathbf{H}$            & Ma trận Hessian \\
+$\mathbf{R}$            & Ma trận đường chéo phương sai dự đoán: $R_{nn}=y_n(1-y_n)$ \\
+$\widetilde{E}(\mathbf{w})$ & Hàm mất mát có điều chuẩn \\
+$\Omega(\mathbf{w})$    & Hàm phạt điều chuẩn (regularization term) \\
+$\mu_k$                 & Vector trung bình của lớp $\mathcal{C}_k$ (LDA/QDA) \\
+$\Sigma, \Sigma_k$      & Ma trận hiệp phương sai chung (LDA) / riêng (QDA) \\
+$S_B$                   & Ma trận phân tán giữa các lớp (between-class scatter) \\
+$S_W$                   & Ma trận phân tán nội lớp (within-class scatter) \\
+$J(w)$                  & Tỷ số Fisher \\
+$\delta_k(x)$           & Hàm điểm phân biệt của lớp $k$ (LDA/QDA) \\
+$\mathcal{M}$           & Tập mẫu bị phân lớp sai (Perceptron) \\
+$E_P(w)$                & Hàm mất mát Perceptron \\
+$w_{best}$              & Trọng số tốt nhất lưu trong Pocket Algorithm \\
+$Y_i^*$                 & Biến ẩn (latent variable) trong mô hình Probit \\
+$\Phi(\cdot)$           & Hàm phân phối tích lũy (CDF) của phân phối chuẩn tắc \\
+$\mathbf{w}_{MAP}$      & Nghiệm MAP của trọng số \\
+$\mathbf{A}$            & Ma trận chính xác Laplace: $\mathbf{A} = -\nabla^2\ln p(\mathbf{w}|\mathcal{D})$ \\
+$\sigma_a^2$            & Phương sai dự đoán của logit: $\sigma_a^2 = \mathbf{x}^{*\top}\mathbf{A}^{-1}\mathbf{x}^*$ \\
+$\kappa(\sigma_a^2)$    & Hệ số làm mềm Laplace: $(1+\frac{\pi}{8}\sigma_a^2)^{-1/2}$ \\
+$\mathbf{a}$            & Vector hệ số đối ngẫu (KLR): $\mathbf{a}=[a_1,\ldots,a_N]^\top$ \\
+$\mu_{jk}, \sigma_{jk}^2$ & Trung bình và phương sai của đặc trưng $j$ trong lớp $k$ (GNB) \\
+$d_{VC}$                & Chiều Vapnik-Chervonenkis \\
+$R(f)$                  & Rủi ro kỳ vọng (Expected Risk) \\
+$\hat{R}_n(f)$          & Rủi ro thực nghiệm (Empirical Risk) \\
+$c_k$                   & Trọng số bù lớp: $c_k = N/(K \cdot N_k)$ \\
+$N_k$                   & Số mẫu thuộc lớp $k$ \\
+$t_{nk}$                & Nhãn one-hot: $t_{nk}=1$ nếu mẫu $n$ thuộc lớp $k$ \\
+$y_{nk}$                & Xác suất dự đoán của mô hình cho mẫu $n$, lớp $k$ \\
+$\delta_{ij}$           & Kronecker delta \\
+
+% PART 4. Compare
+$\mathbf{X}$ & Ma trận đặc trưng đầu vào \\
+$\beta$ & Vector hệ số hồi quy (GLM) \\
+$\eta$ & Bộ dự báo tuyến tính $\eta = \mathbf{X}\beta$ \\
+$\mu$ & Giá trị kỳ vọng $\mu = \mathbb{E}[Y]$ \\
+$g(\cdot)$ & Hàm liên kết (link function) trong GLM \\
+$\theta$ & Tham số chính tắc của họ hàm mũ \\
+$b(\theta)$ & Hàm sinh moment (log-partition function) \\
+$a(\phi)$ & Hàm tán xạ của họ hàm mũ \\
+$c(y,\phi)$ & Hàm chuẩn hóa của họ hàm mũ \\
+$\mathbf{H}$ & Ma trận Hessian, $\mathbf{H} = \boldsymbol{\Phi}^\top\mathbf{R}\boldsymbol{\Phi} + \lambda\mathbf{I}$ \\
+$\mathbf{R}$ & Ma trận trọng số IRLS, $\mathbf{R} = \mathrm{diag}(y_n(1-y_n))$ \\
+$\mathbf{W}$ & Ma trận trọng số đa lớp (Softmax/multiclass) \\
+$K$ & Số lớp trong bài toán phân lớp \\
+$p_k$ & Xác suất dự đoán lớp $k$ (Softmax) \\
+$\Delta R^2$ & Mức suy giảm $R^2$ do nhiễu/corruption \\
+$\Delta\text{Acc}$ & Mức suy giảm Accuracy do nhiễu \\
+$\sigma$ & Cường độ nhiễu Gaussian trong Noise Injection \\
+$p$ & Tỉ lệ dữ liệu bị xóa trong Feature Corruption \\
+
+% PART 5. SUMMARY
+$\varepsilon$ & Ngưỡng hội tụ ($\varepsilon = 10^{-6}$) \\ 
+
+\multicolumn{2}{l}{\textbf{Viết tắt}} \\
+\hline
+OLS & Ordinary Least Squares --- Bình phương tối thiểu thông thường \\
+SSE & Sum of Squared Errors --- Tổng bình phương sai số \\
+MLE & Maximum Likelihood Estimation --- Ước lượng hợp khả cực đại \\
+MAP & Maximum A Posteriori --- Ước lượng hậu nghiệm cực đại \\
+BGD & Batch Gradient Descent \\
+SGD & Stochastic Gradient Descent --- Hạ gradient ngẫu nhiên \\
+NAG & Nesterov Accelerated Gradient \\
+KRR & Kernel Ridge Regression \\
+GPR & Gaussian Process Regression \\
+RBF & Radial Basis Function --- Hàm cơ sở xuyên tâm \\
+IRLS & Iteratively Reweighted Least Squares --- Bình phương tối thiểu có trọng số lặp \\
+AIC & Akaike Information Criterion \\
+BIC & Bayesian Information Criterion \\
+GP  & Gaussian Process --- Quá trình Gaussian \\
+WLS & Weighted Least Squares --- Bình phương tối thiểu có trọng số \\
+EDA     & Exploratory Data Analysis --- Phân tích dữ liệu khám phá \\
+IQR     & Interquartile Range --- Khoảng tứ phân vị \\
+PCA     & Principal Component Analysis --- Phân tích thành phần chính \\
+VIF     & Variance Inflation Factor --- Hệ số phóng đại phương sai \\
+KDE     & Kernel Density Estimation --- Ước lượng mật độ hạt nhân \\
+IoT     & Internet of Things \\
+MSE     & Mean Squared Error --- Sai số bình phương trung bình \\
+MAE     & Mean Absolute Error --- Sai số tuyệt đối trung bình \\
+CV      & Coefficient of Variation --- Hệ số biến thiên \\
+MICE    & Multiple Imputation by Chained Equations \\
+BLUE    & Best Linear Unbiased Estimator --- Ước lượng tuyến tính không chệch tốt nhất \\
+BLR     & Bayesian Linear Regression --- Hồi quy tuyến tính Bayesian \\
+LML     & Log-Marginal-Likelihood \\
+RB      & Robust Regression --- Hồi quy bền vững \\
+CV      & Cross-Validation --- Kiểm định chéo \\
+RMSE    & Root Mean Squared Error --- Căn bậc hai sai số bình phương trung bình \\
+
+% CLASSIFICATION
+LDA     & Linear Discriminant Analysis --- Phân tích phân biệt tuyến tính \\
+QDA     & Quadratic Discriminant Analysis --- Phân tích phân biệt bậc hai \\
+GNB     & Gaussian Naive Bayes \\
+KLR     & Kernel Logistic Regression \\
+SRM     & Structural Risk Minimization --- Giảm thiểu rủi ro cấu trúc \\
+ERM     & Empirical Risk Minimization --- Giảm thiểu rủi ro thực nghiệm \\
+GLM     & Generalized Linear Model --- Mô hình tuyến tính tổng quát \\
+OvR     & One-vs-Rest --- Một đối phần còn lại \\
+OvO     & One-vs-One --- Một đối một \\
+HVP     & Hessian-Vector Product \\
+CG      & Conjugate Gradient --- Gradient liên hợp \\
+CDF     & Cumulative Distribution Function --- Hàm phân phối tích lũy \\
+OOD     & Out-of-Distribution --- Ngoài phân phối huấn luyện \\
+BNN     & Bayesian Neural Network --- Mạng nơ-ron Bayesian \\
+PIR     & Passive Infrared --- Cảm biến hồng ngoại thụ động \\
+LSE     & Log-Sum-Exp (thủ thuật ổn định số cho Softmax) \\
+AUC     & Area Under the Curve --- Diện tích dưới đường cong \\
+ROC     & Receiver Operating Characteristic \\
+BCE     & Binary Cross-Entropy --- Cross-entropy nhị phân \\
+
+% PART 4. COMPARE
+MCAR & Missing Completely At Random --- Mất dữ liệu ngẫu nhiên hoàn toàn \\
+KNN  & K-Nearest Neighbors \\
+CV   & Cross-Validation --- Kiểm định chéo \\
+
+% PART 5. SUMMARY
+SVM  & Support Vector Machine --- Máy vector hỗ trợ \\
+RAM  & Random Access Memory --- Bộ nhớ truy cập ngẫu nhiên \\
+CD   & Coordinate Descent --- Hạ gradient theo tọa độ \\
+GD   & Gradient Descent \\
+\end{longtable}
+
+
+\clearpage
+\pagenumbering{arabic}
 \input{chapters/01_tong_quan}
 \input{chapters/02_hoi_quy}
 \input{chapters/03_phan_lop}
