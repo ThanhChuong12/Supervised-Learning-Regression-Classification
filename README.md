@@ -236,17 +236,23 @@ Supervised-Learning-Regression-Classification/
 │   └── logs_regression.json                # Execution logs and results for regression tests
 │
 ├── report/
-│   ├── chapters/                           # Chapter files
-│   │   ├── 01_tong_quan.tex                # Chapter 1: Overview
-│   │   ├── 02_hoi_quy.tex                  # Chapter 2: Regression
-│   │   ├── 03_phan_lop.tex                 # Chapter 3: Classification
-│   │   ├── 04_so_sanh.tex                  # Chapter 4: Comparison
-│   │   └── 05_tong_ket.tex                 # Chapter 5: Conclusion
-│   ├── refs/                               
-│   │   └── example.bib                     # BibTeX references
-│   ├── codespace.sty                       # LaTeX styling packages
-│   ├── hcmus-report.cls                    # HCMUS template class file
-│   └── report.tex                          # LaTeX main source
+│   ├── README.md                           # Report build notes and usage
+│   ├── output/                             # Compiled report outputs (PDF, artifacts)
+│   └── src/
+│       ├── main.tex                        # LaTeX main source
+│       ├── chapters/                       # Chapter files
+│       │   ├── 01_tong_quan.tex            # Chapter 1: Overview
+│       │   ├── 02_hoi_quy.tex              # Chapter 2: Regression
+│       │   ├── 03_phan_lop.tex             # Chapter 3: Classification
+│       │   ├── 04_so_sanh.tex              # Chapter 4: Comparison
+│       │   └── 05_tong_ket.tex             # Chapter 5: Conclusion
+│       ├── graphics/                       # Figures and visual assets
+│       ├── packages/
+│       │   └── codespace.sty               # LaTeX styling package
+│       ├── refs/
+│       │   └── example.bib                 # BibTeX references
+│       └── styles/
+│           └── hcmus-report.cls            # HCMUS template class file
 │
 ├── .gitignore
 ├── LICENSE
