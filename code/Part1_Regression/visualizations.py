@@ -8,6 +8,7 @@ from sklearn.impute import SimpleImputer, KNNImputer
 from sklearn.metrics import mean_squared_error, r2_score, accuracy_score, f1_score
 from copy import deepcopy
 from models import LinearRegression
+from IPython.display import display
 
 
 def plot_lml_history(lml_history):
@@ -655,3 +656,68 @@ def plot_corruption_summary(df_results):
         
     plt.tight_layout()
     plt.show()
+
+
+def plot_advanced_bias_variance_decomposition(lambdas_bv, bias_sq_list, var_list, mse_list):
+    log_lambdas = np.log10(lambdas_bv)
+
+    fig, axes = plt.subplots(1, 2, figsize=(18, 7))
+
+    ax1 = axes[0]
+    ax1.plot(log_lambdas, bias_sq_list, 's-', color='#e74c3c', linewidth=2, markersize=5, label='Bias²')
+    ax1.plot(log_lambdas, var_list, 'o-', color='#3498db', linewidth=2, markersize=5, label='Variance')
+    ax1.plot(log_lambdas, mse_list, '^-', color='#2ecc71', linewidth=2, markersize=5, label='Total MSE')
+
+    best_idx = int(np.argmin(mse_list))
+    ax1.axvline(x=log_lambdas[best_idx], color='purple', linestyle='--', alpha=0.6,
+                label=f'Optimal λ (log₁₀={log_lambdas[best_idx]:.2f})')
+
+    ax1.set_xlabel('log₁₀(λ)')
+    ax1.set_ylabel('Error')
+    ax1.set_title('Bias-Variance Tradeoff along Regularization Path')
+    
+    ax1.legend(loc='center left', fontsize=10)
+    ax1.grid(True, alpha=0.3)
+
+    # Chú thích vùng Over/Under-fitting
+    ax1.annotate('Overfitting\n(Low Bias, High Var)', 
+                 xy=(log_lambdas[-1], var_list[-1]), fontsize=9,
+                 xytext=(log_lambdas[-1] + 0.5, max(var_list) * 0.8),
+                 arrowprops=dict(arrowstyle='->', color='blue'),
+                 color='blue', ha='center')
+
+    ax1.annotate('Underfitting\n(High Bias, Low Var)',
+                 xy=(log_lambdas[0], bias_sq_list[0]), fontsize=9,
+                 xytext=(log_lambdas[0] - 0.5, max(bias_sq_list) * 0.8),
+                 arrowprops=dict(arrowstyle='->', color='red'),
+                 color='red', ha='center')
+
+    ax2 = axes[1]
+    ax2.fill_between(log_lambdas, 0, bias_sq_list, alpha=0.4, color='#e74c3c', label='Bias²')
+    ax2.fill_between(log_lambdas, bias_sq_list, 
+                     np.array(bias_sq_list) + np.array(var_list), 
+                     alpha=0.4, color='#3498db', label='Variance')
+    ax2.plot(log_lambdas, mse_list, 'k-', linewidth=2, label='Total MSE')
+    ax2.axvline(x=log_lambdas[best_idx], color='purple', linestyle='--', alpha=0.6,
+                label=f'Optimal λ (log₁₀={log_lambdas[best_idx]:.2f})')
+
+    ax2.set_xlabel('log₁₀(λ)')
+    ax2.set_ylabel('Error')
+    ax2.set_title('Bias² - Variance Decomposition (Stacked Area)')
+    
+    ax2.legend(loc='center left', fontsize=10)
+    ax2.grid(True, alpha=0.3)
+
+    plt.suptitle('Bias-Variance Tradeoff Analysis via Bootstrapping (200 iterations)',
+                 fontsize=15, fontweight='bold', y=1.02)
+    plt.tight_layout()
+    plt.show()
+
+    # In kết quả tối ưu
+    print(f"\n{'='*60}")
+    print(f"OPTIMAL REGULARIZATION PARAMETER:")
+    print(f"  λ* = {lambdas_bv[best_idx]:.6f} (log₁₀ = {log_lambdas[best_idx]:.2f})")
+    print(f"  Bias² = {bias_sq_list[best_idx]:.4f}")
+    print(f"  Variance = {var_list[best_idx]:.4f}")
+    print(f"  Total MSE = {mse_list[best_idx]:.4f}")
+    print(f"{'='*60}")
