@@ -974,12 +974,12 @@
       {
         "noise_rate": 0.2,
         "logit_test_accuracy": 0.998,
-        "probit_test_accuracy": 0.9946
+        "probit_test_accuracy": 0.8485
       },
       {
         "noise_rate": 0.3,
         "logit_test_accuracy": 0.997,
-        "probit_test_accuracy": 0.9985
+        "probit_test_accuracy": 0.3751
       }
     ]
   }
